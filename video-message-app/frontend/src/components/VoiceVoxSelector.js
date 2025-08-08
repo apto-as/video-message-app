@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './VoiceVoxSelector.css';
 
-// API URLの設定（環境変数から取得、デフォルトは55433）
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:55433';
+// API URLの設定（環境変数から取得）
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://3.115.141.166';
 
 const VoiceVoxSelector = ({ onVoiceSelect, selectedVoice, showCloneOption = true }) => {
   const [voices, setVoices] = useState([]);
@@ -127,12 +127,19 @@ const VoiceVoxSelector = ({ onVoiceSelect, selectedVoice, showCloneOption = true
   };
 
   const renderVoiceCard = (voice, index) => {
-    const isSelected = selectedVoice && 
-      (selectedVoice.id === voice.id || selectedVoice.id === voice.style_id);
+    // 各音声に固有のIDを設定
+    const voiceUniqueId = voice.style_id || voice.id || voice.speaker_uuid || `voice-${index}`;
+    
+    // 選択状態の判定を正確に行う
+    const isSelected = selectedVoice && (
+      selectedVoice.speakerId === voice.style_id ||
+      selectedVoice.id === voiceUniqueId ||
+      (selectedVoice.metadata && selectedVoice.metadata.style_id === voice.style_id)
+    );
     
     return (
       <div 
-        key={voice.id || voice.style_id || index}
+        key={voiceUniqueId}
         className={`voice-card ${isSelected ? 'selected' : ''}`}
         onClick={() => handleVoiceSelect(voice)}
       >

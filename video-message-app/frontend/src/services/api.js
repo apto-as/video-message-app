@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { API_CONFIG, getApiEndpoint } from '../config/api.config';
 
-// 環境変数から取得、デフォルトは55433
-const API_BASE_URL = `${process.env.REACT_APP_API_BASE_URL || 'http://localhost:55433'}/api`;
+// API設定を統一管理から取得
+const API_BASE_URL = API_CONFIG.API_URL;
 
 // VOICEVOX音声合成（2段階処理：音声生成→D-ID動画生成）
 export const generateVideoWithVoicevox = async (imageFile, text, voiceData = null, audioParams = {}) => {

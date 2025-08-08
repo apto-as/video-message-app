@@ -52,15 +52,22 @@ sudo systemctl enable docker
 sudo usermod -aG docker ubuntu
 
 # 2. アプリケーションのクローン
-echo -e "${YELLOW}2. アプリケーションディレクトリの作成...${NC}"
+echo -e "${YELLOW}2. アプリケーションのクローン...${NC}"
 cd ~
-mkdir -p prototype-app
-cd prototype-app
+if [ -d "video-message-app" ]; then
+    echo "既存のリポジトリを更新..."
+    cd video-message-app
+    git pull
+else
+    git clone https://github.com/apto-as/video-message-app.git
+    cd video-message-app
+fi
 
 # 3. 環境変数ファイルの作成
 echo -e "${YELLOW}3. 環境変数ファイルの作成...${NC}"
 
-# backend/.env.docker の作成
+# video-message-app/backend/.env.docker の作成
+cd ~/video-message-app
 cat > backend/.env.docker << 'ENVEOF'
 # Docker環境用設定
 ENVIRONMENT=docker
@@ -86,26 +93,33 @@ ENVEOF
 # frontend/.env.docker の作成
 cat > frontend/.env.docker << 'ENVEOF'
 REACT_APP_API_URL=http://localhost:55433
-ENVEOF
+ENVEOF || echo "frontend/.env.docker作成をスキップ（frontendディレクトリが存在しない可能性）"
 
 # 4. 必要なディレクトリの作成
 echo -e "${YELLOW}4. ディレクトリ構造の作成...${NC}"
 mkdir -p data/backend/storage/{voices,profiles,backgrounds,avatars,temp,output,openvoice}
 
-# 5. Docker Composeの起動
-echo -e "${YELLOW}5. Docker Composeサービスの起動...${NC}"
+# 5. Docker Composeファイルの確認
+echo -e "${YELLOW}5. Docker Composeファイルのダウンロード...${NC}"
+
+# docker-compose.ymlがない場合はダウンロード
+if [ ! -f docker-compose.yml ]; then
+    echo "docker-compose.ymlが見つかりません。GitHubからダウンロードします..."
+    # docker-compose.ymlは実際にはvideo-message-app内にあるはずなので確認
+    ls -la
+fi
+
+# 6. Docker Composeの起動
+echo -e "${YELLOW}6. Docker Composeサービスの起動...${NC}"
 
 # 既存のコンテナがあれば停止
 sudo docker-compose down || true
 
-# イメージをプル
-sudo docker-compose pull
+# サービス起動（Dockerビルドも行う）
+sudo docker-compose up --build -d
 
-# サービス起動
-sudo docker-compose up -d
-
-# 6. ヘルスチェック
-echo -e "${YELLOW}6. サービスのヘルスチェック...${NC}"
+# 7. ヘルスチェック
+echo -e "${YELLOW}7. サービスのヘルスチェック...${NC}"
 sleep 10
 
 # Backend health check

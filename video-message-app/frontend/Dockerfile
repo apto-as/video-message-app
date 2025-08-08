@@ -19,10 +19,17 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY . .
 
 # 環境変数設定
-ENV REACT_APP_API_BASE_URL=http://localhost:55433
-ENV NODE_ENV=development
+ENV REACT_APP_API_BASE_URL=https://3.115.141.166/api
+ENV NODE_ENV=production
 ENV PORT=55434
 ENV HOST=0.0.0.0
+
+# WebSocket設定（HMR無効化）
+ENV WDS_SOCKET_HOST=3.115.141.166
+ENV WDS_SOCKET_PORT=443
+ENV WDS_SOCKET_PATH=/ws
+ENV PUBLIC_URL=https://3.115.141.166
+ENV GENERATE_SOURCEMAP=false
 
 # ポート公開
 EXPOSE 55434

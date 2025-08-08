@@ -194,6 +194,14 @@ resource "aws_security_group" "app_sg" {
   }
 
   ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
     description = "Backend API"
     from_port   = 55433
     to_port     = 55433
