@@ -23,7 +23,8 @@ const VoiceCloneUpload = ({ onUploadComplete, onProfileUpdate }) => {
   const loadVoiceProfiles = async () => {
     setLoadingProfiles(true);
     try {
-      const response = await fetch('http://localhost:55433/api/voice-clone/profiles');
+      const apiUrl = `${process.env.REACT_APP_API_BASE_URL || 'https://3.115.141.166'}/api/voice-clone/profiles`;
+      const response = await fetch(apiUrl);
       
       if (!response.ok) {
         throw new Error('プロファイル一覧の取得に失敗しました');
@@ -46,7 +47,8 @@ const VoiceCloneUpload = ({ onUploadComplete, onProfileUpdate }) => {
     }
 
     try {
-      const response = await fetch(`http://localhost:55433/api/voice-clone/profiles/${profileId}`, {
+      const apiUrl = `${process.env.REACT_APP_API_BASE_URL || 'https://3.115.141.166'}/api/voice-clone/profiles/${profileId}`;
+      const response = await fetch(apiUrl, {
         method: 'DELETE'
       });
 
@@ -260,7 +262,8 @@ const VoiceCloneUpload = ({ onUploadComplete, onProfileUpdate }) => {
         formData.append('audio_samples', file);
       }
       
-      const response = await fetch('http://localhost:55433/api/voice-clone/register', {
+      const apiUrl = `${process.env.REACT_APP_API_BASE_URL || 'https://3.115.141.166'}/api/voice-clone/register`;
+      const response = await fetch(apiUrl, {
         method: 'POST',
         body: formData
       });

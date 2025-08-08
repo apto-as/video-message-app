@@ -51,7 +51,8 @@ const BackgroundProcessor = ({
                 formData.append('background', backgroundImage);
             }
 
-            const response = await fetch('http://localhost:55433/api/process-image', {
+            const apiUrl = `${process.env.REACT_APP_API_BASE_URL || 'https://3.115.141.166'}/api/process-image`;
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 body: formData,
             });
@@ -85,7 +86,7 @@ const BackgroundProcessor = ({
                 errorMessage = '🚨 バックエンドサーバーに接続できません。\n\n' +
                               '対処法:\n' +
                               '1. サーバーが起動しているか確認してください\n' +
-                              '2. http://localhost:55433/health で接続テストを行ってください\n' +
+                              '2. バックエンドサービスの接続を確認してください\n' +
                               '3. ネットワーク接続を確認してください';
             } else if (error.message.includes('CORS')) {
                 errorMessage = '🔒 CORS（Cross-Origin）エラーが発生しました。サーバー設定を確認してください。';
