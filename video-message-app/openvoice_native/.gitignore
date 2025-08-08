@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# UV
+.venv/
+uv.lock
+
+# Temporary files
+temp/
+*.tmp
+*.temp
+
+# OpenVoice models (large files)
+openvoice_temp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Backup files
+*.backup

@@ -1,0 +1,86 @@
+services:
+  # VOICEVOX Engine (Mac対応CPU版)
+  voicevox:
+    image: voicevox/voicevox_engine:cpu-ubuntu20.04-latest
+    container_name: voicevox_engine
+    ports:
+      - "50021:50021"
+    environment:
+      - VOICEVOX_CPU_NUM_THREADS=2  # Mac環境では控えめに設定
+      - VOICEVOX_ENABLE_MOCK=false
+    # VOICEVOX公式の起動方法に従う（デフォルトのエントリーポイントを使用）
+    restart: unless-stopped
+    # VoiceVoxは内部ファイルが重要なので、ボリュームマウントしない
+    # 必要に応じて音声データのみを別途マウント
+    networks:
+      - voice_network
+    # Mac環境でのメモリ制限
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # FastAPI Backend
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+      cache_from:
+        - voice_backend:latest
+    image: voice_backend:latest
+    container_name: voice_backend
+    ports:
+      - "55433:55433"
+    environment:
+      # 【Springfield環境変数強化】
+      - DOCKER_ENV=true
+      - STORAGE_ROOT_PATH=/app/storage/voices
+      - VOICEVOX_BASE_URL=http://voicevox:50021
+      - OPENVOICE_API_URL=http://host.docker.internal:8001
+      - DID_API_KEY=${DID_API_KEY}
+      - DEBUG_MODE=false
+      - LOG_LEVEL=INFO
+      - PYTHONPATH=/app
+    volumes:
+      - ./backend:/app
+      - ./data/backend/storage:/app/storage
+      - ./data/backend/models:/app/models
+      - ./data/backend/temp:/app/temp
+      - ./data/openvoice:/app/openvoice_models
+    depends_on:
+      - voicevox
+    networks:
+      - voice_network
+    restart: unless-stopped
+
+  # Frontend (React)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      cache_from:
+        - voice_frontend:latest
+    image: voice_frontend:latest
+    container_name: voice_frontend
+    ports:
+      - "55434:55434"
+    environment:
+      - REACT_APP_API_BASE_URL=http://localhost:55433
+      - PORT=55434
+      - HOST=0.0.0.0
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - voice_network
+    restart: unless-stopped
+
+networks:
+  voice_network:
+    driver: bridge
+
+# 名前付きボリュームは削除（バインドマウントを使用）

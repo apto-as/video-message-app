@@ -1,0 +1,25 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+httpx==0.25.2
+python-dotenv==1.0.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+rembg==2.0.67
+onnxruntime==1.21.1
+pillow>=10.0.0,<11.0.0
+opencv-python-headless==4.10.0.84
+numpy>=1.24.0,<2.0.0
+aiofiles==23.2.1
+mutagen==1.47.0
+
+# VOICEVOX依存関係のみ（OpenVoiceはネイティブサービスに分離済み）
+# 基本的な音声処理ライブラリのみ維持
+soundfile>=0.12.0
+
+# 音声処理ユーティリティ
+pydub>=0.25.0
+ffmpeg-python>=0.2.0
+
+# Mac環境用追加依存関係
+scipy>=1.7.0; sys_platform == "darwin"
