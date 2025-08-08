@@ -1,0 +1,21 @@
+{
+  "id": "openvoice_bec943ff",
+  "name": "imoto-test-voice01",
+  "description": "井元剛の声",
+  "language": "ja",
+  "created_at": "2025-07-28T07:22:03.246402",
+  "sample_count": 3,
+  "status": "ready",
+  "provider": "openvoice",
+  "voice_type": "cloned",
+  "metadata": {
+    "sample_files": [
+      "録音_16:20:47.wav",
+      "録音_16:21:38.wav",
+      "録音_16:21:59.wav"
+    ],
+    "processing_time": 0.4040000000004511
+  },
+  "storage_path": "/app/storage/voices/profiles/openvoice_bec943ff",
+  "updated_at": "2025-07-28T07:22:03.246618"
+}

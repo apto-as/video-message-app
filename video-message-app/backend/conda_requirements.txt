@@ -1,0 +1,47 @@
+# Conda環境用requirements.txt（Python 3.11対応）
+# メインバックエンドサービス用パッケージ
+
+# Web Framework & API
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+pydantic>=2.7.0,<3.0.0
+pydantic-settings>=2.1.0,<3.0.0
+
+# HTTP Client & Network
+httpx==0.25.2
+requests==2.32.4
+
+# File & Configuration
+python-dotenv==1.0.0
+aiofiles==24.1.0
+mutagen==1.47.0
+
+# Image Processing (D-ID integration)
+rembg==2.0.67
+pillow>=10.0.0,<12.0.0
+opencv-python-headless>=4.10.0
+onnxruntime>=1.21.0
+
+# Audio Processing (VOICEVOX & D-ID)
+soundfile>=0.12.0
+pydub>=0.25.0
+ffmpeg-python>=0.2.0
+
+# Math & Scientific (互換性重視)
+numpy>=1.24.0,<2.0.0
+scipy>=1.7.0
+scikit-learn>=1.0.0
+scikit-image>=0.19.0
+
+# rembg dependencies
+jsonschema>=4.0.0
+pooch>=1.6.0
+pymatting>=1.1.0
+networkx>=2.6.0
+imageio>=2.9.0
+tifffile>=2021.0.0
+
+# Additional utilities
+tqdm
+loguru>=0.7.2
