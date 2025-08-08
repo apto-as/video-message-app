@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './VoiceVoxSelector.css';
 
-// API URLの設定（環境変数から取得）
+// API URLの設定（環境変数から取得、デフォルトはEC2）
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://3.115.141.166';
 
 const VoiceVoxSelector = ({ onVoiceSelect, selectedVoice, showCloneOption = true }) => {
