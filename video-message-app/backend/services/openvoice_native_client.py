@@ -22,12 +22,12 @@ class OpenVoiceNativeClient:
     def __init__(self, base_url: str = None):
         """Initialize with proper URL detection"""
         if base_url is None:
-            # Try OPENVOICE_SERVICE_URL first
-            base_url = os.environ.get('OPENVOICE_SERVICE_URL')
+            # Try OPENVOICE_API_URL first (matches environment variable)
+            base_url = os.environ.get('OPENVOICE_API_URL')
             if not base_url:
                 # Check if running in Docker
                 if os.environ.get('ENVIRONMENT') == 'docker':
-                    base_url = 'http://172.17.0.1:8001'
+                    base_url = 'http://host.docker.internal:8001'
                 else:
                     base_url = 'http://localhost:8001'
         
