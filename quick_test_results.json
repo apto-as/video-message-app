@@ -1,0 +1,10 @@
+{
+  "timestamp": "2025-09-09T16:04:47.092396",
+  "connectivity": {
+    "Backend": false,
+    "OpenVoice": false,
+    "VOICEVOX": false
+  },
+  "performance": null,
+  "test_type": "quick_validation"
+}

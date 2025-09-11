@@ -1,0 +1,66 @@
+{
+  "timestamp": "2025-09-09T16:06:05.266197",
+  "target_ip": "18.118.69.100",
+  "tests_performed": [
+    {
+      "test_name": "network_connectivity",
+      "results": {
+        "ping": {
+          "status": "failed",
+          "error": ""
+        },
+        "ports": [
+          {
+            "port": 22,
+            "open": false
+          },
+          {
+            "port": 55433,
+            "open": false
+          },
+          {
+            "port": 8001,
+            "open": false
+          },
+          {
+            "port": 50021,
+            "open": false
+          },
+          {
+            "port": 55434,
+            "open": false
+          }
+        ],
+        "dns": {
+          "status": "success",
+          "hostname": "ec2-18-118-69-100.us-east-2.compute.amazonaws.com"
+        }
+      }
+    }
+  ],
+  "security_analysis": {
+    "threat_level": "HIGH",
+    "potential_causes": [
+      "ICMP traffic blocked (Security Group/NACL)",
+      "AWS Security Group rules blocking all traffic",
+      "Network ACL denying access",
+      "EC2 instance firewall (iptables) blocking",
+      "Services not running on target instance",
+      "Instance may be stopped or terminated"
+    ],
+    "security_recommendations": [
+      "Verify AWS Security Group has proper inbound rules",
+      "Check Network ACL configuration",
+      "Confirm EC2 instance is running",
+      "Verify services are started inside instance",
+      "Check iptables/firewall rules on instance"
+    ],
+    "immediate_actions": [
+      "Check AWS Security Group ICMP rules",
+      "SSH into instance to check service status",
+      "Review AWS Console for Security Group rules",
+      "Check CloudWatch logs for instance activity",
+      "Verify Elastic IP association"
+    ]
+  }
+}

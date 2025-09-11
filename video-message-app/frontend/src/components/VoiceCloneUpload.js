@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './VoiceCloneUpload.css';
+import { getApiEndpoint, API_CONFIG } from '../config/api.config.js';
 
 const VoiceCloneUpload = ({ onUploadComplete, onProfileUpdate }) => {
   const [activeTab, setActiveTab] = useState('create'); // 'create' or 'manage'
@@ -23,7 +24,7 @@ const VoiceCloneUpload = ({ onUploadComplete, onProfileUpdate }) => {
   const loadVoiceProfiles = async () => {
     setLoadingProfiles(true);
     try {
-      const apiUrl = `${process.env.REACT_APP_API_BASE_URL || 'https://3.115.141.166'}/api/voice-clone/profiles`;
+      const apiUrl = getApiEndpoint(API_CONFIG.ENDPOINTS.VOICE_CLONE_PROFILES);
       const response = await fetch(apiUrl);
       
       if (!response.ok) {
@@ -47,7 +48,7 @@ const VoiceCloneUpload = ({ onUploadComplete, onProfileUpdate }) => {
     }
 
     try {
-      const apiUrl = `${process.env.REACT_APP_API_BASE_URL || 'https://3.115.141.166'}/api/voice-clone/profiles/${profileId}`;
+      const apiUrl = `${getApiEndpoint(API_CONFIG.ENDPOINTS.VOICE_CLONE_PROFILES)}/${profileId}`;
       const response = await fetch(apiUrl, {
         method: 'DELETE'
       });
@@ -262,7 +263,7 @@ const VoiceCloneUpload = ({ onUploadComplete, onProfileUpdate }) => {
         formData.append('audio_samples', file);
       }
       
-      const apiUrl = `${process.env.REACT_APP_API_BASE_URL || 'https://3.115.141.166'}/api/voice-clone/register`;
+      const apiUrl = getApiEndpoint(API_CONFIG.ENDPOINTS.VOICE_CLONE_REGISTER);
       const response = await fetch(apiUrl, {
         method: 'POST',
         body: formData

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './VoiceVoxSelector.css';
-
-// API URLの設定（環境変数から取得、デフォルトはEC2）
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://3.115.141.166';
+import { getApiEndpoint, API_CONFIG } from '../config/api.config.js';
 
 const VoiceVoxSelector = ({ onVoiceSelect, selectedVoice, showCloneOption = true }) => {
   const [voices, setVoices] = useState([]);
@@ -25,16 +23,16 @@ const VoiceVoxSelector = ({ onVoiceSelect, selectedVoice, showCloneOption = true
       
       switch (activeTab) {
         case 'voicevox':
-          endpoint = '/api/voicevox/speakers/popular';
+          endpoint = API_CONFIG.ENDPOINTS.VOICEVOX_SPEAKERS_POPULAR;
           break;
         case 'openvoice':
-          endpoint = '/api/unified-voice/voices?provider=openvoice';
+          endpoint = `${API_CONFIG.ENDPOINTS.UNIFIED_VOICE_LIST}?provider=openvoice`;
           break;
         default:
-          endpoint = '/api/unified-voice/voices';
+          endpoint = API_CONFIG.ENDPOINTS.UNIFIED_VOICE_LIST;
       }
       
-      const response = await fetch(`${API_BASE_URL}${endpoint}`);
+      const response = await fetch(getApiEndpoint(endpoint));
       
       if (!response.ok) {
         throw new Error(`音声一覧の取得に失敗しました: ${response.status}`);

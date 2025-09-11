@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getApiEndpoint, API_CONFIG } from '../config/api.config.js';
 
 const BackgroundProcessor = ({ 
     onImageProcessed, 
@@ -51,7 +52,7 @@ const BackgroundProcessor = ({
                 formData.append('background', backgroundImage);
             }
 
-            const apiUrl = `${process.env.REACT_APP_API_BASE_URL || 'https://3.115.141.166'}/api/process-image`;
+            const apiUrl = getApiEndpoint(API_CONFIG.ENDPOINTS.PROCESS_IMAGE);
             const response = await fetch(apiUrl, {
                 method: 'POST',
                 body: formData,

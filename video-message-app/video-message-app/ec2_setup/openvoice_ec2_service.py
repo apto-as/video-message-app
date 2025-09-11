@@ -23,9 +23,24 @@ os.environ['PYTHONIOENCODING'] = 'utf-8'
 os.environ['LC_ALL'] = 'en_US.UTF-8'
 os.environ['LANG'] = 'en_US.UTF-8'
 
-# CUDAを完全に無効化（EC2 CPU環境）
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
-os.environ['CUDA_HOME'] = ''
+# CUDA設定（Tesla T4 GPU利用）
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # GPU 0を使用
+# CUDAが利用できない場合のフォールバック
+import subprocess
+try:
+    # GPU確認
+    result = subprocess.run(['nvidia-smi'], capture_output=True, text=True, timeout=5)
+    if result.returncode == 0:
+        logger.info("NVIDIA GPU detected, using CUDA")
+        device = "cuda"
+    else:
+        logger.warning("NVIDIA GPU not detected, falling back to CPU")
+        os.environ['CUDA_VISIBLE_DEVICES'] = ''
+        device = "cpu"
+except:
+    logger.warning("Failed to check GPU, falling back to CPU")
+    os.environ['CUDA_VISIBLE_DEVICES'] = ''
+    device = "cpu"
 
 # ログ設定
 logging.basicConfig(
@@ -57,11 +72,14 @@ if OPENVOICE_PATH.exists():
     logger.info(f"Added OpenVoice path: {OPENVOICE_PATH}")
 
 import torch
-# PyTorchをCPUモードに強制
-torch.cuda.is_available = lambda: False
-torch.cuda.device_count = lambda: 0
-device = "cpu"
-logger.info(f"Using device: {device}")
+# デバイス設定（GPUチェック結果に基づく）
+if device == "cuda" and torch.cuda.is_available():
+    logger.info(f"Using CUDA device: {torch.cuda.get_device_name(0)}")
+else:
+    device = "cpu"
+    logger.info("Using CPU device")
+
+logger.info(f"Final device selection: {device}")
 
 # Mac環境と同じWhisperパッチを適用
 import platform

@@ -1,0 +1,198 @@
+{
+  "timestamp": "2025-09-09T16:09:35.750378",
+  "mission_status": "EMERGENCY_RESPONSE_ACTIVE",
+  "team_assignments": {},
+  "execution_timeline": {},
+  "coordination_points": [],
+  "success_metrics": {
+    "primary_objectives": {
+      "connection_restoration": {
+        "metric": "EC2インスタンスへの外部アクセス確立",
+        "target": "100% - 全サービスポートへの接続",
+        "measurement": "TCP接続テスト成功率"
+      },
+      "performance_validation": {
+        "metric": "音声合成処理時間",
+        "target": "≤ 2.0秒 (従来15秒から87%改善)",
+        "measurement": "実際の合成時間測定"
+      },
+      "gpu_utilization": {
+        "metric": "Tesla T4 GPU使用効率",
+        "target": "GPU使用率 > 80% during synthesis",
+        "measurement": "nvidia-smi monitoring"
+      }
+    },
+    "secondary_objectives": {
+      "system_stability": {
+        "metric": "全サービス稼働状況",
+        "target": "100% uptime during test",
+        "measurement": "Health endpoint responses"
+      },
+      "security_compliance": {
+        "metric": "セキュリティ設定の適切性",
+        "target": "必要最小限のアクセス権限",
+        "measurement": "Security Group rule analysis"
+      }
+    },
+    "decision_criteria": {
+      "old_instance_shutdown": {
+        "conditions": [
+          "新インスタンスでの目標パフォーマンス達成",
+          "全サービスの正常動作確認",
+          "セキュリティ設定の適切性確認",
+          "コスト効率の改善確認"
+        ],
+        "threshold": "4/4条件の完全満足"
+      }
+    }
+  },
+  "fallback_procedures": {},
+  "team_readiness": {
+    "Athena": {
+      "role": "Harmonious Conductor",
+      "current_status": "standby_support",
+      "task_suitability": 0.6,
+      "deployment_ready": false
+    },
+    "Artemis": {
+      "role": "Technical Perfectionist",
+      "current_status": "awaiting_connection_restore",
+      "task_suitability": 0.4,
+      "deployment_ready": false
+    },
+    "Hestia": {
+      "role": "Security Guardian",
+      "current_status": "primary_responder",
+      "task_suitability": 1.0,
+      "deployment_ready": true
+    },
+    "Hera": {
+      "role": "Strategic Commander",
+      "current_status": "strategic_oversight",
+      "task_suitability": 0.8,
+      "deployment_ready": true
+    },
+    "Muses": {
+      "role": "Knowledge Architect",
+      "current_status": "documentation_ready",
+      "task_suitability": 0.3,
+      "deployment_ready": false
+    }
+  },
+  "tactical_assignments": {
+    "primary_response": {
+      "lead": "Hestia",
+      "support": [
+        "Hera"
+      ],
+      "tasks": [
+        "AWS Console接続とEC2インスタンス状況確認",
+        "Security Group設定の詳細診断",
+        "必要な設定変更の実行",
+        "セキュリティリスク評価"
+      ],
+      "timeline": "0-10 minutes",
+      "success_criteria": "外部からEC2インスタンスへの接続確立"
+    },
+    "performance_validation": {
+      "lead": "Artemis",
+      "support": [
+        "Hestia"
+      ],
+      "tasks": [
+        "GPU Tesla T4の稼働状況確認",
+        "音声合成パフォーマンステスト実行",
+        "2秒以内の処理時間目標達成確認",
+        "システムリソース使用状況監視"
+      ],
+      "timeline": "10-25 minutes",
+      "success_criteria": "目標パフォーマンス(2秒以内)の達成確認"
+    },
+    "migration_decision": {
+      "lead": "Eris",
+      "support": [
+        "Hera",
+        "Artemis"
+      ],
+      "tasks": [
+        "パフォーマンステスト結果の総合評価",
+        "旧インスタンス停止の可否判定",
+        "コスト最適化の確認",
+        "リスク評価の最終確認"
+      ],
+      "timeline": "25-30 minutes",
+      "success_criteria": "旧インスタンス停止の明確な判定"
+    },
+    "documentation": {
+      "lead": "Muses",
+      "support": [
+        "全チーム"
+      ],
+      "tasks": [
+        "全プロセスの詳細記録",
+        "パフォーマンス改善結果の文書化",
+        "今後の運用ガイドライン作成",
+        "ナレッジベースへの情報統合"
+      ],
+      "timeline": "並行実行",
+      "success_criteria": "包括的なドキュメント作成完了"
+    }
+  },
+  "communication_protocol": {
+    "reporting_frequency": "5分間隔でのステータス更新",
+    "escalation_triggers": [
+      "タスク完了予定時間を50%超過",
+      "予期しない技術的問題の発生",
+      "セキュリティリスクの新たな発見"
+    ],
+    "coordination_checkpoints": [
+      {
+        "time": "5分後",
+        "check": "Hestiaの初期診断完了確認"
+      },
+      {
+        "time": "10分後",
+        "check": "接続復旧とアクセス確立確認"
+      },
+      {
+        "time": "20分後",
+        "check": "Artemisのパフォーマンステスト結果"
+      },
+      {
+        "time": "30分後",
+        "check": "最終判定と次ステップ決定"
+      }
+    ],
+    "emergency_procedures": {
+      "technical_failure": "Heraによる代替戦略の即座実行",
+      "security_breach": "全活動停止とセキュリティ最優先対応",
+      "timeline_deviation": "Erisによる優先度再調整"
+    }
+  },
+  "contingency_plans": {
+    "plan_a_failure": {
+      "trigger": "AWS Console接続/設定変更が失敗",
+      "response": "Heraの戦略Option B (Session Manager)に即座切替",
+      "responsible": "Hestia + Hera",
+      "timeline": "即座実行(5分以内)"
+    },
+    "performance_below_target": {
+      "trigger": "音声合成が2秒を超過",
+      "response": "詳細パフォーマンス分析とボトルネック特定",
+      "responsible": "Artemis主導",
+      "timeline": "追加15分の分析時間"
+    },
+    "security_risk_detected": {
+      "trigger": "重大なセキュリティリスクを発見",
+      "response": "全テスト停止、セキュリティ最優先対応",
+      "responsible": "Hestia主導、全チーム支援",
+      "timeline": "即座停止、リスク評価後再開判定"
+    },
+    "complete_failure": {
+      "trigger": "全ての戦略オプションが失敗",
+      "response": "Heraの戦略Option D (Rollback)を実行",
+      "responsible": "Hera + Eris",
+      "timeline": "15-20分での旧設定復帰"
+    }
+  }
+}
