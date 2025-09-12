@@ -119,8 +119,7 @@ fi
 if [ ! -d "OpenVoiceV2" ]; then
     echo "Cloning OpenVoice V2..."
     git clone https://github.com/myshell-ai/OpenVoice.git OpenVoiceV2
-    cd OpenVoiceV2
-    git checkout v2
+    # v2ブランチは存在しないので、mainブランチを使用
     cd ..
 fi
 
