@@ -13,7 +13,7 @@ from datetime import datetime
 import aiofiles
 
 from .openvoice_native_client import OpenVoiceNativeClient
-from ..core.logging import get_logger, log_info, log_error, log_warning
+from core.logging import get_logger, log_info, log_error, log_warning
 
 logger = get_logger(__name__)
 
