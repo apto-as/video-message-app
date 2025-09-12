@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenVoice Native Service
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/video-message-app/video-message-app/openvoice_native
+Environment="PATH=/home/ec2-user/video-message-app/video-message-app/openvoice_native/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/ec2-user/video-message-app/video-message-app/openvoice_native/venv/bin/python /home/ec2-user/video-message-app/video-message-app/openvoice_native/main.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
