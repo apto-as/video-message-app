@@ -123,20 +123,35 @@ if [ ! -d "OpenVoiceV2" ]; then
     cd ..
 fi
 
+# MeCabディレクトリシンボリックリンクを作成（必要な場合）
+if [ ! -L "/home/ec2-user/.local/lib/python3.11/site-packages/unidic/dicdir" ]; then
+    echo "Setting up MeCab dictionary symlink..."
+    sudo mkdir -p /home/ec2-user/.local/lib/python3.11/site-packages/unidic/
+    DICT_PATH=$(find venv -name "dicdir" -type d | grep unidic | head -1)
+    if [ -n "$DICT_PATH" ]; then
+        sudo ln -sf "$(pwd)/$DICT_PATH" /home/ec2-user/.local/lib/python3.11/site-packages/unidic/dicdir
+    fi
+fi
+
 # サービスを起動
 echo "🚀 Starting OpenVoice Native Service..."
-nohup python main.py > openvoice.log 2>&1 &
+nohup uvicorn main:app --host 0.0.0.0 --port 8001 > openvoice.log 2>&1 &
 OPENVOICE_PID=$!
 
-# 起動確認（最大30秒待機）
-echo "Waiting for service to start..."
-for i in {1..30}; do
-    if curl -s http://localhost:8001/health > /dev/null 2>&1; then
-        echo "✅ OpenVoice Native Service is running! (PID: $OPENVOICE_PID)"
+# 起動確認（最大60秒待機 - モデル読み込みに時間がかかる）
+echo "Waiting for service to initialize (this may take 30-60 seconds)..."
+for i in {1..60}; do
+    if curl -s http://localhost:8001/health 2>/dev/null | grep -q '"status":"healthy"'; then
+        echo ""
+        echo "✅ OpenVoice Native Service is running and healthy! (PID: $OPENVOICE_PID)"
         break
     fi
+    if [ $((i % 10)) -eq 0 ]; then
+        echo -n " ${i}s"
+    else
+        echo -n "."
+    fi
     sleep 1
-    echo -n "."
 done
 
 # Dockerサービスの再起動
