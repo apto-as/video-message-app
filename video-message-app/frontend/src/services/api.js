@@ -66,7 +66,7 @@ export const generateVideoWithOpenVoice = async (imageFile, text, voiceData = nu
       emotion: audioParams.emotion || 'neutral'
     };
 
-    console.log('OpenVoice synthesis request:', voiceRequest);
+    // Debug output removed for production
 
     const voiceResponse = await axios.post(`${API_BASE_URL}/unified-voice/synthesize`, voiceRequest, {
       headers: {
@@ -80,7 +80,7 @@ export const generateVideoWithOpenVoice = async (imageFile, text, voiceData = nu
     const audioBlob = new Blob([voiceResponse.data], { type: 'audio/wav' });
     const audioUrl = URL.createObjectURL(audioBlob);
 
-    console.log('OpenVoice synthesis successful, audio size:', audioBlob.size);
+    // Audio synthesis successful
 
     // Step 2: D-ID動画生成
     const videoResult = await generateVideoWithDId(audioUrl, imageFile, {});
@@ -92,7 +92,7 @@ export const generateVideoWithOpenVoice = async (imageFile, text, voiceData = nu
     };
 
   } catch (error) {
-    console.error('OpenVoice synthesis error:', error);
+    // Log error to monitoring service in production
     if (error.response) {
       throw new Error(error.response.data.detail || 'サーバーエラー');
     } else if (error.request) {
@@ -187,8 +187,7 @@ export const generateTestVoice = async (text = "こんにちは。これは既�
     const audioBlob = new Blob([response.data], { type: 'audio/wav' });
     const audioUrl = URL.createObjectURL(audioBlob);
 
-    console.log('Test voice generation successful, audio size:', audioBlob.size);
-    console.log('Profile ID:', response.headers['x-profile-id']);
+    // Test voice generation successful
 
     return {
       success: true,
@@ -198,7 +197,7 @@ export const generateTestVoice = async (text = "こんにちは。これは既�
     };
 
   } catch (error) {
-    console.error('Test voice generation error:', error);
+    // Error handling for test voice generation
     if (error.response) {
       throw new Error(error.response.data.detail || 'サーバーエラー');
     } else if (error.request) {
@@ -227,9 +226,7 @@ export const testVoiceProfile = async (profileId, text = "こんにちは、音�
     const audioBlob = new Blob([response.data], { type: 'audio/wav' });
     const audioUrl = URL.createObjectURL(audioBlob);
 
-    console.log('Voice test successful, audio size:', audioBlob.size);
-    console.log('Profile name:', response.headers['x-profile-name']);
-    console.log('Native service used:', response.headers['x-native-service']);
+    // Voice test successful
 
     return {
       success: true,
@@ -240,7 +237,7 @@ export const testVoiceProfile = async (profileId, text = "こんにちは、音�
     };
 
   } catch (error) {
-    console.error('Voice test error:', error);
+    // Error handling for voice test
     if (error.response) {
       throw new Error(error.response.data.detail || 'サーバーエラー');
     } else if (error.request) {
@@ -316,7 +313,7 @@ export const generateVideoWithDId = async (audioUrl, imageFile = null, options =
       status: response.data.status
     };
   } catch (error) {
-    console.error('D-ID動画生成エラー:', error);
+    // Error handling for D-ID video generation
     if (error.response) {
       throw new Error(error.response.data.detail || 'サーバーエラー');
     } else if (error.request) {

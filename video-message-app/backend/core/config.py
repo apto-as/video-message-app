@@ -3,7 +3,7 @@ from typing import List, Optional
 import os
 
 class Settings(BaseSettings):
-    cors_origins: List[str] = ["http://localhost:55434"]
+    cors_origins: List[str] = Field(default_factory=lambda: os.getenv("CORS_ORIGINS", "http://localhost:55434").split(","))
     max_file_size: int = 5 * 1024 * 1024  # 5MB
     did_api_key: Optional[str] = None  # D-ID API key for lip-sync video generation
     
