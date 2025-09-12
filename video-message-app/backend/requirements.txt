@@ -12,6 +12,8 @@ opencv-python-headless==4.10.0.84
 numpy>=1.24.0,<2.0.0
 aiofiles==23.2.1
 mutagen==1.47.0
+structlog==24.1.0
+python-json-logger==2.0.7
 
 # VOICEVOX依存関係のみ（OpenVoiceはネイティブサービスに分離済み）
 # 基本的な音声処理ライブラリのみ維持

@@ -5,7 +5,6 @@ OpenVoice ハイブリッドクライアント
 
 import os
 import asyncio
-import logging
 import tempfile
 import shutil
 from typing import Optional, Dict, Any, List
@@ -14,8 +13,9 @@ from datetime import datetime
 import aiofiles
 
 from .openvoice_native_client import OpenVoiceNativeClient
+from ..core.logging import get_logger, log_info, log_error, log_warning
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class OpenVoiceHybridClient:
     """OpenVoice ハイブリッドクライアント"""
@@ -28,9 +28,9 @@ class OpenVoiceHybridClient:
         # ネイティブサービス可用性チェック
         self._native_available = await self.native_client.check_service_health()
         if self._native_available:
-            logger.info("OpenVoice Native Service利用可能")
+            log_info("OpenVoice Native Service available", service="openvoice")
         else:
-            logger.warning("OpenVoice Native Service利用不可 - フォールバックモード")
+            log_warning("OpenVoice Native Service unavailable - fallback mode", service="openvoice")
         return self
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -45,25 +45,31 @@ class OpenVoiceHybridClient:
     ) -> Optional[Dict[str, Any]]:
         """音声クローン作成（ハイブリッド）"""
         
-        logger.info(f"音声クローン作成開始: {name}, サンプル数: {len(audio_paths)}")
+        log_info(
+            "Starting voice clone creation",
+            name=name,
+            sample_count=len(audio_paths),
+            language=language
+        )
         
         # 【修正】毎回サービス可用性を確認
         try:
             self._native_available = await self.native_client.check_service_health()
-            logger.info(f"ネイティブサービス可用性: {self._native_available}")
+            logger.debug("Service availability", available=self._native_available)
         except Exception as health_error:
-            logger.error(f"ヘルスチェックエラー: {str(health_error)}")
+            log_error("Health check failed", error=health_error)
             self._native_available = False
         
         if not self._native_available:
-            logger.error("OpenVoice Native Serviceヘルスチェック失敗")
-            # デバッグ情報を追加
-            logger.error(f"Native client base URL: {self.native_client.base_url}")
-            logger.error(f"Docker環境: {os.environ.get('DOCKER_ENV', 'Not set')}")
+            log_error(
+                "OpenVoice Native Service health check failed",
+                base_url=self.native_client.base_url,
+                docker_env=os.environ.get('DOCKER_ENV', 'Not set')
+            )
             raise Exception("OpenVoice Native Serviceが利用できません。サービスを起動してください。")
         
         try:
-            logger.info("ネイティブサービスで音声クローン実行")
+            log_info("Executing voice clone on native service")
             result = await self.native_client.create_voice_clone(
                 name=name,
                 audio_paths=audio_paths,
@@ -71,18 +77,18 @@ class OpenVoiceHybridClient:
                 profile_id=profile_id
             )
             
-            logger.info(f"ネイティブサービス結果: {result}")
+            logger.debug("Native service result", result=result)
             
             if result and result.get('success'):
-                logger.info("音声クローン作成成功")
+                log_info("Voice clone created successfully", profile_id=profile_id)
                 return result
             else:
                 error_msg = result.get('error', 'Unknown error') if result else 'No result returned'
-                logger.error(f"ネイティブサービス処理失敗: {error_msg}")
+                log_error("Native service processing failed", error_message=error_msg)
                 raise Exception(f"ネイティブサービス処理失敗: {error_msg}")
                 
         except Exception as e:
-            logger.error(f"ネイティブサービスでの音声クローン失敗: {str(e)}")
+            log_error("Voice clone failed on native service", error=e)
             raise Exception(f"音声クローン処理エラー: {str(e)}")
     
     async def synthesize_with_clone(
@@ -157,13 +163,11 @@ class OpenVoiceHybridClient:
                 'fallback_mode': True
             }
             
-            return {
-                'success': True,
-                'profile_id': profile_id or f"fallback_{asyncio.get_event_loop().time()}",
-                'path': None,
-                'processing_time': 0,
-                'fallback_mode': True
-            }
+            # フォールバックモードでは実際の処理は行わず、エラーを通知
+            raise Exception(
+                f"音声クローン作成に失敗しました。OpenVoice Native Service が利用できません。"
+                f"Name: {name}, Language: {language}"
+            )
             
         except Exception as e:
             logger.error(f"フォールバック音声クローンエラー: {str(e)}")
