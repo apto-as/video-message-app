@@ -33,15 +33,12 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.production
     container_name: voice_frontend
     expose:
       - "80"
-    volumes:
-      - ./frontend/build:/usr/share/nginx/html
-    environment:
-      - REACT_APP_API_BASE_URL=https://3.115.141.166
-      - REACT_APP_API_URL=https://3.115.141.166
     networks:
       - voice_network
     depends_on:
