@@ -21,6 +21,7 @@ NC='\033[0m' # No Color
 # SSHキーファイルを探す
 find_ssh_key() {
     local key_paths=(
+        "$HOME/.ssh/video-app-key.pem"
         "$HOME/.ssh/id_rsa"
         "$HOME/.ssh/id_ed25519"
         "$HOME/.ssh/ec2-terraform.pem"
