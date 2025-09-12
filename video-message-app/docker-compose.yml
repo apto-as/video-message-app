@@ -23,7 +23,7 @@ services:
     environment:
       - ENVIRONMENT=docker
       - VOICEVOX_URL=http://voicevox:50021
-      - OPENVOICE_SERVICE_URL=http://host.docker.internal:8001
+      - OPENVOICE_SERVICE_URL=http://172.31.20.86:8001  # EC2 private IP
       - D_ID_API_KEY=your-d-id-api-key-here
       - LOG_LEVEL=INFO
     networks:

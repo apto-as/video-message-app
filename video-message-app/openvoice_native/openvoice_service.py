@@ -113,8 +113,20 @@ class OpenVoiceNativeService:
     async def _import_openvoice(self) -> bool:
         """OpenVoiceライブラリのインポート"""
         try:
+            # NumPyバージョンチェック
+            import numpy as np
+            logger.info(f"NumPy version: {np.__version__}")
+            
             # 遅延インポート
             global ToneColorConverter, se_extractor, TTS
+            
+            # OpenVoice V2のインポートパスを調整
+            import sys
+            openvoice_path = os.path.join(os.path.dirname(__file__), "OpenVoiceV2")
+            if os.path.exists(openvoice_path) and openvoice_path not in sys.path:
+                sys.path.insert(0, openvoice_path)
+                logger.info(f"Added OpenVoice path: {openvoice_path}")
+            
             from openvoice.api import ToneColorConverter
             from openvoice import se_extractor
             from melo.api import TTS
@@ -124,6 +136,9 @@ class OpenVoiceNativeService:
             
         except ImportError as e:
             logger.error(f"OpenVoiceインポートエラー: {str(e)}")
+            # 詳細なインポートエラー情報
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return False
     
     async def _initialize_models(self) -> bool:
