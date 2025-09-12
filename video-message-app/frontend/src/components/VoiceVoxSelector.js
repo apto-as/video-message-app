@@ -95,7 +95,7 @@ const VoiceVoxSelector = ({ onVoiceSelect, selectedVoice, showCloneOption = true
         };
       }
       
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(`${getApiEndpoint()}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
