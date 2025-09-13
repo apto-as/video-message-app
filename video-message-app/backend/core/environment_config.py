@@ -77,14 +77,19 @@ class EnvironmentConfig:
         
         # API設定
         self.did_api_key = os.environ.get('DID_API_KEY')
-        self.voicevox_base_url = os.environ.get('VOICEVOX_BASE_URL', 'http://voicevox:50021' if self.is_docker_env else 'http://localhost:50021')
-        self.openvoice_api_url = os.environ.get('OPENVOICE_API_URL', 'http://host.docker.internal:8001' if self.is_docker_env else 'http://localhost:8001')
+        self.voicevox_base_url = os.environ.get('VOICEVOX_BASE_URL', 'http://voicevox:50021' if self.is_docker else 'http://localhost:50021')
+        self.openvoice_api_url = os.environ.get('OPENVOICE_API_URL', 'http://host.docker.internal:8001' if self.is_docker else 'http://localhost:8001')
         
         # デバッグ設定
         self.debug_mode = os.environ.get('DEBUG_MODE', 'true').lower() == 'true'
         self.log_level = os.environ.get('LOG_LEVEL', 'INFO')
         
         logger.info(f"基本設定読み込み完了 - 環境: {self.environment_type}, Docker: {self.is_docker}")
+    
+    @property
+    def is_docker_env(self) -> bool:
+        """is_docker_envプロパティ（後方互換性のため）"""
+        return self.is_docker
     
     def get_storage_path(self, fallback_path: Optional[str] = None) -> str:
         """ストレージパスの取得（フォールバック機能付き）"""
