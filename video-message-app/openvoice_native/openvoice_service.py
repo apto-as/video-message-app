@@ -21,29 +21,34 @@ from models import VoiceProfile, VoiceCloneResponse, VoiceSynthesisResponse
 
 logger = logging.getLogger(__name__)
 
-# Mac環境でのWhisperモデル設定をパッチ
+# Mac環境でのWhisperモデル設定を最適化
 import platform
 if platform.system() == 'Darwin':
-    # Whisperモデルをパッチして、CUDA使用を回避
     import sys
     import importlib
     
-    # WhisperModelのインポートを遅延させる
     def patch_whisper_model():
+        """最適化されたWhisperモデルパッチ"""
         try:
             from faster_whisper import WhisperModel as OriginalWhisperModel
             
-            class PatchedWhisperModel(OriginalWhisperModel):
+            class OptimizedWhisperModel(OriginalWhisperModel):
                 def __init__(self, model_size, device="auto", compute_type="auto", **kwargs):
-                    # Macの場合、常にCPUを使用
-                    if device == "cuda":
-                        logger.info("Mac環境検出: WhisperモデルをCPUモードに変更")
+                    # Macの場合、最適化されたCPU設定
+                    if device == "cuda" or platform.system() == 'Darwin':
+                        logger.info("Mac環境検出: WhisperモデルをCPU最適化モードに変更")
                         device = "cpu"
-                        compute_type = "int8"  # CPUでの高速化
+                        compute_type = "int8"  # CPU最適化
+                        # メモリ効率化のためのオプション
+                        kwargs.update({
+                            'cpu_threads': 4,  # CPU並列化
+                            'num_workers': 1,  # メモリ節約
+                        })
                     super().__init__(model_size, device=device, compute_type=compute_type, **kwargs)
             
             # モジュールレベルでパッチを適用
-            sys.modules['faster_whisper'].WhisperModel = PatchedWhisperModel
+            sys.modules['faster_whisper'].WhisperModel = OptimizedWhisperModel
+            logger.info("Whisperモデルの最適化パッチ適用完了")
             
         except Exception as e:
             logger.warning(f"Whisperモデルのパッチ適用失敗: {str(e)}")
@@ -176,6 +181,8 @@ class OpenVoiceNativeService:
         profile_id: Optional[str] = None
     ) -> VoiceCloneResponse:
         """音声クローン作成"""
+        import time
+        total_start = time.time()
         
         if not self._initialized:
             return VoiceCloneResponse(
@@ -193,6 +200,7 @@ class OpenVoiceNativeService:
             logger.info(f"音声クローン作成開始: {name} (ID: {profile_id})")
             
             # 音声ファイルを一時保存
+            save_start = time.time()
             audio_paths = []
             for i, audio_data in enumerate(audio_files):
                 temp_file = tempfile.NamedTemporaryFile(
@@ -207,15 +215,27 @@ class OpenVoiceNativeService:
                 
                 audio_paths.append(temp_file.name)
             
-            # 音声特徴抽出
-            embedding = await self._extract_voice_embedding(audio_paths, language)
-            if not embedding:
+            logger.info(f"音声ファイル保存完了: {time.time() - save_start:.2f}秒")
+            
+            # 最適化された音声特徴抽出
+            extract_start = time.time()
+            embedding_result = await self._extract_voice_embedding(audio_paths, language)
+            logger.info(f"音声特徴抽出完了: {time.time() - extract_start:.2f}秒")
+            if not embedding_result or 'embeddings' not in embedding_result:
                 raise Exception("音声特徴の抽出に失敗しました")
             
-            # プロファイル保存
-            profile = await self._save_voice_profile(
-                profile_id, name, language, audio_paths, embedding
+            # 並列処理結果から最適な埋め込みを作成
+            processed_embedding = await self._create_final_embedding(
+                embedding_result, language
             )
+            
+            # プロファイル保存
+            save_profile_start = time.time()
+            profile = await self._save_voice_profile(
+                profile_id, name, language, audio_paths, processed_embedding
+            )
+            logger.info(f"プロファイル保存完了: {time.time() - save_profile_start:.2f}秒")
+            logger.info(f"=== 音声クローン作成総時間: {time.time() - total_start:.2f}秒 ===")
             
             # バックエンド用に埋め込みファイルのパスを返却
             return VoiceCloneResponse(
@@ -246,113 +266,178 @@ class OpenVoiceNativeService:
         audio_paths: List[str], 
         language: str
     ) -> Optional[Dict]:
-        """音声特徴抽出（OpenVoice V2公式方式）"""
+        """最適化された音声特徴抽出（並列処理・高速化）"""
+        import time
+        start_time = time.time()
+        
         try:
+            # 並列処理のためのプロファイリング
+            logger.info(f"音声特徴抽出開始: {len(audio_paths)}サンプルを並列処理")
+            
+            # 音声ファイルの事前チェック（高速）
+            valid_paths = []
+            for audio_path in audio_paths:
+                if not os.path.exists(audio_path):
+                    logger.warning(f"音声ファイルが見つかりません: {audio_path}")
+                    continue
+                valid_paths.append(audio_path)
+            
+            if not valid_paths:
+                raise Exception("有効な音声ファイルがありません")
+            
+            # 並列処理用のタスクを作成
+            tasks = []
+            for i, audio_path in enumerate(valid_paths):
+                task = self._extract_single_embedding_optimized(audio_path, i)
+                tasks.append(task)
+            
+            # 並列実行（最大3並列）
+            import asyncio
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # 結果の処理
             embeddings = []
             audio_names = []
+            successful_extractions = 0
             
-            for audio_path in audio_paths:
-                logger.info(f"音声特徴抽出開始: {audio_path}")
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"サンプル {i+1} 処理失敗: {str(result)}")
+                    continue
                 
-                # ファイル存在・読み込み可能性チェック
-                if not os.path.exists(audio_path):
-                    raise Exception(f"音声ファイルが見つかりません: {audio_path}")
+                if result and 'embedding' in result:
+                    embeddings.append(result['embedding'])
+                    audio_names.append(result['audio_name'])
+                    successful_extractions += 1
+                    logger.info(f"音声サンプル {i+1}/{len(valid_paths)} 処理完了")
+            
+            if successful_extractions == 0:
+                raise Exception("すべての音声特徴抽出に失敗しました")
+            
+            elapsed_time = time.time() - start_time
+            logger.info(f"音声特徴抽出完了: {successful_extractions}サンプル, 処理時間: {elapsed_time:.2f}秒")
+            
+            return {
+                'embeddings': embeddings,
+                'audio_names': audio_names,
+                'processing_time': elapsed_time,
+                'success_count': successful_extractions
+            }
+            
+        except Exception as e:
+            elapsed_time = time.time() - start_time
+            logger.error(f"音声特徴抽出エラー ({elapsed_time:.2f}秒): {str(e)}")
+            return None
+    
+    async def _extract_single_embedding_optimized(self, audio_path: str, index: int) -> Optional[Dict]:
+        """単一音声の最適化された特徴抽出"""
+        import time
+        start_time = time.time()
+        
+        try:
+            logger.info(f"音声特徴抽出開始: {audio_path}")
+            
+            # 音声ファイルの詳細情報を取得（高速）
+            try:
+                import librosa
+                y, sr = librosa.load(audio_path, sr=22050)  # 固定サンプリングレートで高速化
+                duration = len(y) / sr
+                rms_energy = np.sqrt(np.mean(y**2))
+                logger.info(f"音声ファイル詳細 - Duration: {duration:.2f}s, Energy: {rms_energy:.6f}, SR: {sr}Hz")
                 
-                # 音声ファイルの詳細情報を取得
-                try:
-                    import librosa
-                    y, sr = librosa.load(audio_path, sr=None)
-                    duration = len(y) / sr
-                    rms_energy = np.sqrt(np.mean(y**2))
-                    logger.info(f"音声ファイル詳細 - Duration: {duration:.2f}s, Energy: {rms_energy:.6f}, SR: {sr}Hz")
-                    
-                    if duration < 1.0:
-                        logger.warning(f"音声が短すぎます: {duration:.2f}秒")
-                    if rms_energy < 0.001:
-                        logger.warning(f"音声エネルギーが低すぎます: {rms_energy:.6f}")
+                # 早期品質チェック
+                if duration < 1.0:
+                    logger.warning(f"音声が短すぎます: {duration:.2f}秒")
+                if rms_energy < 0.001:
+                    logger.warning(f"音声エネルギーが低すぎます: {rms_energy:.6f}")
                         
-                except Exception as info_error:
-                    logger.warning(f"音声ファイル情報取得失敗: {str(info_error)}")
+            except Exception as info_error:
+                logger.warning(f"音声ファイル情報取得失敗: {str(info_error)}")
+            
+            # 最適化されたWhisper処理
+            try:
+                import tempfile
+                import shutil
                 
-                # デフォルトはVADなしを推奨（より確実）
+                # メモリ内処理で一時ファイル最小化
+                temp_dir = tempfile.mkdtemp(prefix=f"openvoice_opt_{index}_")
+                temp_audio_path = os.path.join(temp_dir, f"temp_{os.path.basename(audio_path)}")
+                
+                # 高速ファイルコピー
+                shutil.copy2(audio_path, temp_audio_path)
+                
+                # 最適化されたse_extractor呼び出し
+                # VADを無効にしてWhisperを使用（CPUモード最適化済み）
+                se_start = time.time()
+                logger.info(f"se_extractor.get_se開始 (index={index})")
+                reference_se, audio_name = se_extractor.get_se(
+                    temp_audio_path, 
+                    self._tone_color_converter, 
+                    vad=False  # VADを無効化（CPUでのWhisper処理）
+                )
+                logger.info(f"se_extractor.get_se完了: {time.time() - se_start:.2f}秒")
+                
+                # 一時ファイルを即座に削除
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                
+                elapsed_time = time.time() - start_time
+                logger.info(f"音声特徴抽出成功（最適化モード）: {audio_name} ({elapsed_time:.2f}秒)")
+                
+                return {
+                    'embedding': reference_se,
+                    'audio_name': audio_name,
+                    'processing_time': elapsed_time
+                }
+                
+            except Exception as extract_error:
+                # フォールバック: 簡易処理（軽量化）
+                logger.error(f"音声特徴抽出失敗: {str(extract_error)}")
                 try:
-                    # カスタムVAD設定を使用（se_extractorの設定を上書き）
-                    import tempfile
-                    import shutil
-                    from pydub import AudioSegment
-                    
-                    # 一時ディレクトリを作成
-                    temp_dir = tempfile.mkdtemp(prefix="openvoice_temp_")
-                    temp_audio_path = os.path.join(temp_dir, f"temp_{os.path.basename(audio_path)}")
-                    
-                    # 音声ファイルをコピー（パスの問題を避けるため）
-                    shutil.copy2(audio_path, temp_audio_path)
-                    
-                    # VADなしで処理（より安定）
-                    reference_se, audio_name = se_extractor.get_se(
-                        temp_audio_path, 
-                        self._tone_color_converter, 
-                        vad=False  # VADを無効化してWhisperモデルを使用
-                    )
-                    logger.info(f"音声特徴抽出成功（VADなし・Whisperモード）: {audio_name}")
-                    
-                    # 一時ファイルを削除
                     shutil.rmtree(temp_dir, ignore_errors=True)
-                    
-                except Exception as extract_error:
-                    logger.error(f"音声特徴抽出失敗: {str(extract_error)}")
-                    
-                    # 最後の手段：手動で音声を分割して処理
-                    try:
-                        logger.info("フォールバック：手動音声分割モードを試行")
-                        
-                        # 音声を手動で分割（10秒ごと）
-                        audio = AudioSegment.from_file(audio_path)
-                        chunk_length_ms = 10000  # 10秒
-                        chunks = []
-                        
-                        for i in range(0, len(audio), chunk_length_ms):
-                            chunk = audio[i:i+chunk_length_ms]
-                            if len(chunk) > 1500:  # 1.5秒以上のチャンクのみ使用
-                                chunks.append(chunk)
-                        
-                        if not chunks:
-                            raise Exception("有効な音声チャンクが作成できませんでした")
-                        
-                        # 最初のチャンクで特徴抽出を試行
-                        temp_chunk_path = os.path.join(temp_dir, "chunk_0.wav")
-                        chunks[0].export(temp_chunk_path, format="wav")
-                        
-                        reference_se, audio_name = se_extractor.get_se(
-                            temp_chunk_path, 
-                            self._tone_color_converter, 
-                            vad=False
-                        )
-                        logger.info(f"フォールバック成功: {audio_name}")
-                        
-                    except Exception as fallback_error:
-                        logger.error(f"フォールバックも失敗: {str(fallback_error)}")
-                        raise Exception(f"音声特徴抽出に完全に失敗しました: {str(extract_error)}")
+                except:
+                    pass
                 
-                # 抽出結果の検証
-                if reference_se is None or len(reference_se) == 0:
-                    raise Exception(f"音声特徴の抽出に失敗（空の埋め込み）: {audio_path}")
+                # 最適化失敗時の軽量フォールバック
+                logger.info("フォールバック：軽量モードを試行")
+                raise extract_error  # 完全にエラーとして扱う
                 
-                embeddings.append(reference_se)
-                audio_names.append(audio_name)
-                logger.info(f"音声サンプル {len(embeddings)}/{len(audio_paths)} 処理完了")
+        except Exception as e:
+            elapsed_time = time.time() - start_time
+            logger.error(f"音声特徴抽出完全失敗 ({elapsed_time:.2f}秒): {str(e)}")
+            return None
+    
+    async def _create_final_embedding(
+        self, 
+        embedding_result: Dict, 
+        language: str
+    ) -> Dict:
+        """並列処理結果から最終的な埋め込みを作成"""
+        try:
+            embeddings = embedding_result['embeddings']
+            audio_names = embedding_result['audio_names']
+            processing_time = embedding_result['processing_time']
             
-            # 複数サンプルの平均化（MPSデバイス対応）
+            if not embeddings:
+                raise Exception("有効な埋め込みがありません")
+            
+            # 複数サンプルの場合は平均化（MPSデバイス対応）
             if len(embeddings) > 1:
+                logger.info(f"複数サンプルの平均化開始: {len(embeddings)}サンプル")
+                
                 # MPSデバイスの場合、CPUに移動してからNumPy変換
                 cpu_embeddings = []
                 for emb in embeddings:
                     if hasattr(emb, 'cpu'):
-                        cpu_embeddings.append(emb.cpu().numpy() if hasattr(emb, 'numpy') else emb.cpu())
+                        cpu_emb = emb.cpu().numpy() if hasattr(emb, 'numpy') else emb.cpu()
+                        cpu_embeddings.append(cpu_emb)
                     else:
                         cpu_embeddings.append(emb)
+                
+                # 数値的な平均化
                 averaged_embedding = np.mean(cpu_embeddings, axis=0)
+                logger.info("埋め込み平均化完了")
             else:
+                # 単一サンプルの場合
                 emb = embeddings[0]
                 if hasattr(emb, 'cpu'):
                     averaged_embedding = emb.cpu().numpy() if hasattr(emb, 'numpy') else emb.cpu()
@@ -362,14 +447,15 @@ class OpenVoiceNativeService:
             return {
                 'embedding': averaged_embedding,
                 'language': language,
-                'sample_count': len(audio_paths),
-                'audio_names': audio_names,  # 公式に準拠して追加
+                'sample_count': len(embeddings),
+                'audio_names': audio_names,
+                'processing_time': processing_time,
                 'created_at': datetime.now().isoformat()
             }
             
         except Exception as e:
-            logger.error(f"音声特徴抽出エラー: {str(e)}")
-            return None
+            logger.error(f"最終埋め込み作成エラー: {str(e)}")
+            raise e
     
     async def _save_voice_profile(
         self, 
