@@ -13,7 +13,7 @@ class OpenVoiceNativeConfig(BaseModel):
     # サービス設定
     host: str = "0.0.0.0"
     port: int = 8001
-    debug: bool = True
+    debug: bool = False  # Production環境ではreloadを無効化
     
     # ファイルパス設定
     base_dir: Path = Path(__file__).parent.parent
@@ -47,7 +47,16 @@ class OpenVoiceNativeConfig(BaseModel):
         """PyTorchデバイスを動的に設定"""
         try:
             import torch
-            if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            # EC2環境かどうかを確認
+            import platform
+            is_ec2 = os.path.exists('/home/ec2-user')
+            
+            if is_ec2 and torch.cuda.is_available():
+                # EC2環境では必ずCUDAを使用
+                self.device = "cuda"
+                torch.cuda.set_device(0)  # 明示的にGPU 0を選択
+                print(f"EC2環境: CUDA device {torch.cuda.current_device()} を使用")
+            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                 self.device = "mps"
             elif torch.cuda.is_available():
                 self.device = "cuda"
