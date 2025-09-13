@@ -136,6 +136,109 @@ class OpenVoiceNativeService:
             from openvoice import se_extractor
             from melo.api import TTS
             
+            # EC2環境でのse_extractorのWhisperModelをパッチ
+            import time
+            import openvoice.se_extractor as se_module
+            from faster_whisper import WhisperModel
+            
+            # 元の関数を保存
+            original_split_audio_whisper = se_module.split_audio_whisper
+            
+            def patched_split_audio_whisper(audio_path, audio_name, target_dir='processed'):
+                """パッチされたsplit_audio_whisper - EC2でGPUを正しく使用"""
+                global se_module
+                if se_module.model is None:
+                    # EC2環境でGPUが利用可能かチェック
+                    import torch
+                    is_ec2 = os.path.exists('/home/ec2-user')
+                    
+                    if is_ec2 and torch.cuda.is_available():
+                        device = "cuda"
+                        compute_type = "float16"
+                        logger.info(f"EC2環境: WhisperModelをGPUで初期化 (device={device}, compute_type={compute_type})")
+                    else:
+                        device = "cpu"
+                        compute_type = "int8"
+                        logger.info(f"WhisperModelをCPUで初期化 (device={device}, compute_type={compute_type})")
+                    
+                    init_start = time.time()
+                    se_module.model = WhisperModel(
+                        se_module.model_size,
+                        device=device,
+                        compute_type=compute_type,
+                        cpu_threads=4 if device == "cpu" else 0,
+                        num_workers=1
+                    )
+                    logger.info(f"WhisperModel初期化完了: {time.time() - init_start:.2f}秒")
+                
+                # 元の処理の詳細なタイミング付き実行
+                from pydub import AudioSegment
+                import os
+                
+                logger.info(f"音声ファイル読み込み開始: {audio_path}")
+                load_start = time.time()
+                audio = AudioSegment.from_file(audio_path)
+                max_len = len(audio)
+                logger.info(f"音声ファイル読み込み完了: {time.time() - load_start:.2f}秒, 長さ: {max_len/1000:.2f}秒")
+                
+                target_folder = os.path.join(target_dir, audio_name)
+                
+                # Transcribe with timing
+                transcribe_start = time.time()
+                logger.info(f"Whisper transcribe開始")
+                segments, info = se_module.model.transcribe(audio_path, beam_size=5, word_timestamps=True)
+                segments = list(segments)
+                logger.info(f"Whisper transcribe完了: {time.time() - transcribe_start:.2f}秒, セグメント数: {len(segments)}")
+                
+                # ディレクトリ作成
+                os.makedirs(target_folder, exist_ok=True)
+                wavs_folder = os.path.join(target_folder, 'wavs')
+                os.makedirs(wavs_folder, exist_ok=True)
+                
+                # セグメント処理
+                segment_start = time.time()
+                s_ind = 0
+                start_time = None
+                saved_count = 0
+                
+                for k, w in enumerate(segments):
+                    if k == 0:
+                        start_time = max(0, w.start)
+                    
+                    end_time = w.end
+                    
+                    if len(w.words) > 0:
+                        confidence = sum([s.probability for s in w.words]) / len(w.words)
+                    else:
+                        confidence = 0.
+                    
+                    text = w.text.replace('...', '')
+                    
+                    audio_seg = audio[int(start_time * 1000) : min(max_len, int(end_time * 1000) + 80)]
+                    
+                    fname = f"{audio_name}_seg{s_ind}.wav"
+                    
+                    save = audio_seg.duration_seconds > 1.5 and \
+                            audio_seg.duration_seconds < 20. and \
+                            len(text) >= 2 and len(text) < 200
+                    
+                    if save:
+                        output_file = os.path.join(wavs_folder, fname)
+                        audio_seg.export(output_file, format='wav')
+                        saved_count += 1
+                    
+                    if k < len(segments) - 1:
+                        start_time = max(0, segments[k+1].start - 0.08)
+                    
+                    s_ind = s_ind + 1
+                
+                logger.info(f"セグメント処理完了: {time.time() - segment_start:.2f}秒, 保存: {saved_count}個")
+                return wavs_folder
+            
+            # モンキーパッチを適用
+            se_module.split_audio_whisper = patched_split_audio_whisper
+            logger.info("se_extractorのWhisperModelパッチ適用完了")
+            
             logger.info("OpenVoiceライブラリのインポートに成功")
             return True
             
@@ -366,16 +469,31 @@ class OpenVoiceNativeService:
                 # 高速ファイルコピー
                 shutil.copy2(audio_path, temp_audio_path)
                 
-                # 最適化されたse_extractor呼び出し
-                # VADを無効にしてWhisperを使用（CPUモード最適化済み）
-                se_start = time.time()
-                logger.info(f"se_extractor.get_se開始 (index={index})")
-                reference_se, audio_name = se_extractor.get_se(
-                    temp_audio_path, 
-                    self._tone_color_converter, 
-                    vad=False  # VADを無効化（CPUでのWhisper処理）
-                )
-                logger.info(f"se_extractor.get_se完了: {time.time() - se_start:.2f}秒")
+                # EC2環境では簡易モードを試す
+                is_ec2 = os.path.exists('/home/ec2-user')
+                
+                if is_ec2 and os.getenv('OPENVOICE_FAST_MODE', 'false').lower() == 'true':
+                    # 高速モード: Whisperをスキップして直接音声特徴を抽出
+                    logger.info(f"高速モード: Whisperをスキップ (index={index})")
+                    se_start = time.time()
+                    
+                    # 音声ファイルを直接処理（セグメント化せずに全体を使用）
+                    audio_segs = [temp_audio_path]
+                    se_save_path = os.path.join(temp_dir, 'se.pth')
+                    reference_se = self._tone_color_converter.extract_se(audio_segs, se_save_path=se_save_path)
+                    audio_name = f"fast_mode_{index}"
+                    
+                    logger.info(f"高速モード完了: {time.time() - se_start:.2f}秒")
+                else:
+                    # 通常モード: se_extractorを使用（最適化済み）
+                    se_start = time.time()
+                    logger.info(f"se_extractor.get_se開始 (index={index})")
+                    reference_se, audio_name = se_extractor.get_se(
+                        temp_audio_path, 
+                        self._tone_color_converter, 
+                        vad=False  # VADを無効化（Whisper処理）
+                    )
+                    logger.info(f"se_extractor.get_se完了: {time.time() - se_start:.2f}秒")
                 
                 # 一時ファイルを即座に削除
                 shutil.rmtree(temp_dir, ignore_errors=True)
