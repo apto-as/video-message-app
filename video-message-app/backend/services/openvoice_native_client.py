@@ -62,17 +62,21 @@ class OpenVoiceNativeClient:
     ) -> Dict[str, Any]:
         """音声クローンを作成"""
         try:
-            # Simple implementation - just forward to the OpenVoice service
+            # Prepare files for OpenVoice service (expects 'audio_samples')
             files = []
-            # OpenVoice Simple only accepts one file
-            if audio_paths:
-                with open(audio_paths[0], 'rb') as f:
-                    files = [('audio_file', ('audio.wav', f.read(), 'audio/wav'))]
+            for idx, audio_path in enumerate(audio_paths):
+                with open(audio_path, 'rb') as f:
+                    files.append(('audio_samples', (f'audio_{idx}.wav', f.read(), 'audio/wav')))
             
-            data = {'name': name}
+            data = {
+                'name': name,
+                'language': language
+            }
+            if profile_id:
+                data['voice_profile_id'] = profile_id
             
             response = await self.client.post(
-                f'{self.base_url}/api/clone',
+                f'{self.base_url}/voice-clone/create',
                 data=data,
                 files=files
             )
@@ -106,11 +110,12 @@ class OpenVoiceNativeClient:
         """音声を合成"""
         try:
             response = await self.client.post(
-                f'{self.base_url}/api/synthesize',
+                f'{self.base_url}/voice-clone/synthesize',
                 data={
                     'text': text,
-                    'profile_id': profile_id,
-                    'language': language
+                    'voice_profile_id': profile_id,  # Changed from 'profile_id' to 'voice_profile_id'
+                    'language': language,
+                    'speed': 1.0
                 }
             )
             
@@ -134,7 +139,7 @@ class OpenVoiceNativeClient:
     async def list_profiles(self) -> List[Dict[str, Any]]:
         """プロファイル一覧を取得"""
         try:
-            response = await self.client.get(f'{self.base_url}/api/profiles')
+            response = await self.client.get(f'{self.base_url}/voice-clone/profiles')
             if response.status_code == 200:
                 return response.json()
         except Exception as e:
@@ -146,7 +151,7 @@ class OpenVoiceNativeClient:
         """プロファイルを削除"""
         try:
             response = await self.client.delete(
-                f'{self.base_url}/api/profiles/{profile_id}'
+                f'{self.base_url}/voice-clone/profiles/{profile_id}'
             )
             return response.status_code == 200
         except Exception as e:
