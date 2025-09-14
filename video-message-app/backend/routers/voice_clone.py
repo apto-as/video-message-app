@@ -477,7 +477,10 @@ async def test_voice_profile(
                 detail="指定されたプロファイルが見つかりません"
             )
         
-        logger.info(f"プロファイル取得成功: {profile.get('name')} (参照音声: {profile.get('reference_audio_path')})")
+        # プロファイルにIDを追加（synthesize_with_cloneで必要）
+        profile['id'] = profile_id
+        
+        logger.info(f"プロファイル取得成功: {profile.get('name')} (ID: {profile_id}, 参照音声: {profile.get('reference_audio_path')})")
         
         # OpenVoice ハイブリッドクライアントで音声合成（遅延インポート）
         from services.openvoice_hybrid_client import OpenVoiceHybridClient
