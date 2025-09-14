@@ -120,7 +120,17 @@ class OpenVoiceNativeClient:
             )
             
             if response.status_code == 200:
-                return response.content
+                # OpenVoice Native Service returns JSON with base64-encoded audio
+                result = response.json()
+                if result.get('success') and result.get('audio_data'):
+                    # Decode base64 audio data
+                    import base64
+                    audio_data = base64.b64decode(result['audio_data'])
+                    logger.info(f"音声合成成功: {len(audio_data)} bytes")
+                    return audio_data
+                else:
+                    logger.error(f"音声合成失敗: {result.get('error', 'Unknown error')}")
+                    return None
             
         except Exception as e:
             logger.error(f'Voice synthesis failed: {e}')
