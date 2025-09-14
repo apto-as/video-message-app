@@ -148,6 +148,8 @@ class OpenVoiceNativeService:
                 """パッチされたsplit_audio_whisper - EC2でGPUを正しく使用"""
                 # se_moduleを関数内でインポート（スコープ問題を解決）
                 import openvoice.se_extractor as se_mod
+                import os
+                import time
                 if se_mod.model is None:
                     # EC2環境でGPUが利用可能かチェック
                     import torch
@@ -174,7 +176,6 @@ class OpenVoiceNativeService:
                 
                 # 元の処理の詳細なタイミング付き実行
                 from pydub import AudioSegment
-                import os
                 
                 logger.info(f"音声ファイル読み込み開始: {audio_path}")
                 load_start = time.time()
