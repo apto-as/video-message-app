@@ -61,10 +61,11 @@ class OpenVoiceHybridClient:
             self._native_available = False
         
         if not self._native_available:
+            from core.environment_config import env_config
             log_error(
                 "OpenVoice Native Service health check failed",
                 base_url=self.native_client.base_url,
-                docker_env=os.environ.get('DOCKER_ENV', 'Not set')
+                environment_type=env_config.environment_type
             )
             raise Exception("OpenVoice Native Serviceが利用できません。サービスを起動してください。")
         
