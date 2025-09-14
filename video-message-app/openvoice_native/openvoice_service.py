@@ -738,12 +738,18 @@ class OpenVoiceNativeService:
         try:
             import torch
             
+            logger.info(f"[DEBUG] 音声合成開始: text='{text[:50]}...', language={language}, speed={speed}")
+            logger.info(f"[DEBUG] Embedding type: {type(embedding)}, keys: {embedding.keys() if isinstance(embedding, dict) else 'Not a dict'}")
+            
             # TTSモデル取得
             tts_model = self._models.get(language, self._models['ja'])
+            logger.info(f"[DEBUG] TTS model selected for language: {language}")
             
             # 一時ファイル生成
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
                 temp_path = temp_file.name
+            
+            logger.info(f"[DEBUG] Temp file created: {temp_path}")
             
             try:
                 # 基本音声生成
@@ -755,7 +761,9 @@ class OpenVoiceNativeService:
                 if torch.backends.mps.is_available() and self.config.device == 'cpu':
                     torch.backends.mps.is_available = lambda: False
                 
+                logger.info(f"[DEBUG] Generating base TTS: speaker_id={speaker_id}, text length={len(text)}")
                 tts_model.tts_to_file(text, speaker_id, temp_path, speed=speed)
+                logger.info(f"[DEBUG] Base TTS generated: {temp_path}, file exists: {os.path.exists(temp_path)}")
                 
                 # ベーススピーカー埋め込み読み込み（公式方式）
                 speaker_key_normalized = speaker_key.lower().replace('_', '-')
@@ -764,7 +772,9 @@ class OpenVoiceNativeService:
                 if not base_speaker_path.exists():
                     # フォールバック：日本語ベーススピーカー
                     base_speaker_path = self.config.speakers_dir / "jp.pth"
+                    logger.info(f"[DEBUG] Using fallback speaker: {base_speaker_path}")
                 
+                logger.info(f"[DEBUG] Loading base speaker from: {base_speaker_path}")
                 source_se = torch.load(str(base_speaker_path), map_location=self.config.device)
                 
                 # 音色変換（公式方式：src_se=ベース, tgt_se=ターゲット）
@@ -773,9 +783,15 @@ class OpenVoiceNativeService:
                 # 埋め込みをTensorに変換（MPS対応）
                 import torch
                 if isinstance(embedding['embedding'], np.ndarray):
+                    logger.info(f"[DEBUG] Converting numpy embedding to tensor, shape: {embedding['embedding'].shape}")
                     tgt_se_tensor = torch.from_numpy(embedding['embedding']).to(self.config.device)
                 else:
+                    logger.info(f"[DEBUG] Embedding is already a tensor")
                     tgt_se_tensor = embedding['embedding']
+                
+                logger.info(f"[DEBUG] Starting tone color conversion...")
+                logger.info(f"[DEBUG] Source SE shape: {source_se.shape if hasattr(source_se, 'shape') else 'unknown'}")
+                logger.info(f"[DEBUG] Target SE shape: {tgt_se_tensor.shape if hasattr(tgt_se_tensor, 'shape') else 'unknown'}")
                 
                 self._tone_color_converter.convert(
                     audio_src_path=temp_path,
@@ -785,10 +801,13 @@ class OpenVoiceNativeService:
                     message="@OpenVoiceClone"  # 公式サンプルに準拠
                 )
                 
+                logger.info(f"[DEBUG] Tone color conversion complete: {output_path}, file exists: {os.path.exists(output_path)}")
+                
                 # 結果読み込み
                 async with aiofiles.open(output_path, 'rb') as f:
                     audio_data = await f.read()
                 
+                logger.info(f"[DEBUG] Audio data loaded: {len(audio_data)} bytes")
                 return audio_data
                 
             finally:
