@@ -146,8 +146,9 @@ class OpenVoiceNativeService:
             
             def patched_split_audio_whisper(audio_path, audio_name, target_dir='processed'):
                 """パッチされたsplit_audio_whisper - EC2でGPUを正しく使用"""
-                global se_module
-                if se_module.model is None:
+                # se_moduleを関数内でインポート（スコープ問題を解決）
+                import openvoice.se_extractor as se_mod
+                if se_mod.model is None:
                     # EC2環境でGPUが利用可能かチェック
                     import torch
                     is_ec2 = os.path.exists('/home/ec2-user')
@@ -162,8 +163,8 @@ class OpenVoiceNativeService:
                         logger.info(f"WhisperModelをCPUで初期化 (device={device}, compute_type={compute_type})")
                     
                     init_start = time.time()
-                    se_module.model = WhisperModel(
-                        se_module.model_size,
+                    se_mod.model = WhisperModel(
+                        se_mod.model_size,
                         device=device,
                         compute_type=compute_type,
                         cpu_threads=4 if device == "cpu" else 0,
@@ -186,7 +187,7 @@ class OpenVoiceNativeService:
                 # Transcribe with timing
                 transcribe_start = time.time()
                 logger.info(f"Whisper transcribe開始")
-                segments, info = se_module.model.transcribe(audio_path, beam_size=5, word_timestamps=True)
+                segments, info = se_mod.model.transcribe(audio_path, beam_size=5, word_timestamps=True)
                 segments = list(segments)
                 logger.info(f"Whisper transcribe完了: {time.time() - transcribe_start:.2f}秒, セグメント数: {len(segments)}")
                 
