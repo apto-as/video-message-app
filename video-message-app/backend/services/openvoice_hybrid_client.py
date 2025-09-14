@@ -111,12 +111,16 @@ class OpenVoiceHybridClient:
         if current_available:
             try:
                 logger.info("ネイティブサービスで音声合成実行")
+                # profile_idを抽出
+                profile_id = voice_profile.get('id')
+                if not profile_id:
+                    logger.error("プロファイルIDが見つかりません")
+                    raise ValueError("プロファイルIDが必要です")
+                
                 result = await self.native_client.synthesize_with_clone(
                     text=text,
-                    voice_profile=voice_profile,
-                    language=language,
-                    speed=speed,
-                    emotion=emotion
+                    profile_id=profile_id,
+                    language=language
                 )
                 if result and len(result) > 1000:  # 実際の音声データかチェック
                     logger.info(f"ネイティブサービス音声合成成功: {len(result)} bytes")

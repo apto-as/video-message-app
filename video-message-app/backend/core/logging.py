@@ -9,7 +9,11 @@ from typing import Any, Dict, Optional
 from datetime import datetime
 from pathlib import Path
 import structlog
-from pythonjsonlogger import jsonlogger
+try:
+    from pythonjsonlogger import jsonlogger
+except ImportError:
+    # python-json-loggerパッケージの正しいインポート
+    from python_json_logger import jsonlogger
 
 # Log levels
 CRITICAL = logging.CRITICAL

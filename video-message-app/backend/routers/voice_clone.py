@@ -502,13 +502,24 @@ async def test_voice_profile(
         # 【緊急修正】音声データをHTTPレスポンスとして直接返却
         from fastapi.responses import Response
         
+        # プロファイル名を安全にエンコード（ASCII文字のみを許可）
+        profile_name = profile.get('name', 'Unknown')
+        try:
+            # ASCII文字に変換可能か確認
+            safe_profile_name = profile_name.encode('ascii', 'ignore').decode('ascii')
+            if not safe_profile_name:
+                safe_profile_name = profile_id  # 変換できない場合はIDを使用
+        except:
+            safe_profile_name = profile_id
+        
         return Response(
             content=audio_data,
             media_type="audio/wav",
             headers={
                 "Content-Disposition": f"attachment; filename=voice_test_{profile_id}.wav",
                 "X-Audio-Size": str(len(audio_data)),
-                "X-Profile-Name": profile.get('name', 'Unknown'),
+                "X-Profile-Name": safe_profile_name,
+                "X-Profile-Id": profile_id,
                 "X-Native-Service": str(availability.get('native_service', False)),
                 "X-Test-Success": "true"
             }
