@@ -230,13 +230,11 @@ class VoiceStorageService:
             # OpenVoice Native Serviceからもプロファイルを削除
             try:
                 import requests
-                # Docker環境とローカル環境でURLを切り替え
-                if os.environ.get('DOCKER_ENV'):
-                    # Docker環境
-                    native_service_url = "http://host.docker.internal:8001"
-                else:
-                    # ローカル環境
-                    native_service_url = "http://localhost:8001"
+                from core.environment_config import env_config
+                
+                # 環境設定システムを使用してURLを取得
+                service_urls = env_config.get_voice_service_urls()
+                native_service_url = service_urls.get("openvoice")
                 
                 response = requests.delete(f"{native_service_url}/voice-clone/profiles/{profile_id}")
                 if response.status_code == 200:
