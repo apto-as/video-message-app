@@ -131,21 +131,9 @@ class OpenVoiceHybridClient:
             except Exception as e:
                 logger.error(f"ネイティブサービス音声合成エラー: {str(e)}")
         
-        # 【重要】フォールバックでは参照音声ファイルを直接使用（和音生成を避ける）
-        reference_audio_path = voice_profile.get('reference_audio_path')
-        if reference_audio_path and os.path.exists(reference_audio_path):
-            logger.info(f"参照音声ファイルを使用: {reference_audio_path}")
-            try:
-                async with aiofiles.open(reference_audio_path, 'rb') as f:
-                    reference_audio = await f.read()
-                    if len(reference_audio) > 1000:
-                        logger.info(f"参照音声ファイル使用成功: {len(reference_audio)} bytes")
-                        return reference_audio
-            except Exception as e:
-                logger.error(f"参照音声ファイル読み込みエラー: {str(e)}")
-        
-        # 最後の手段：エラーを投げる（和音生成はしない）
-        raise Exception(f"音声合成に失敗しました。プロファイル '{voice_profile.get('name')}' の参照音声ファイルを確認してください。")
+        # エラーとして扱う（フォールバックは使用しない）
+        logger.error(f"音声合成に失敗しました。Native Service応答: {result}")
+        raise Exception(f"音声合成に失敗しました。OpenVoice Native Serviceを確認してください。")
     
     async def _fallback_voice_clone(
         self,
