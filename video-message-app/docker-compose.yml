@@ -10,6 +10,36 @@ services:
       - voice_network
     restart: unless-stopped
 
+  openvoice:
+    build:
+      context: ./openvoice_native
+      args:
+        USE_CUDA: ${USE_CUDA:-false}
+        DEVICE: ${DEVICE:-cpu}
+    container_name: openvoice_native
+    runtime: nvidia  # NVIDIA Container Runtime for GPU access
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./data/backend/storage:/app/storage
+      - ./openvoice_native/data/openvoice:/app/data/openvoice:ro
+      - openvoice-tmp:/tmp  # 一時ファイル用の名前付きボリューム
+    tmpfs:
+      - /tmp/gradio:size=512M,mode=1777  # Gradio専用tmpfs（512MB制限、スティッキービット）
+      - /tmp/tmpfiles_me:size=2G,mode=1777  # Whisper一時ファイル用tmpfs（2GB制限、スティッキービット）
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - DEVICE=${DEVICE:-cpu}
+      - STORAGE_PATH=/app/storage
+      - OPENVOICE_BASE_DIR=/app
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      - voice_network
+    restart: unless-stopped
+    # Conditional deployment based on profile
+    # profiles:
+    #   - with-openvoice  # Uncomment to make optional
+
   backend:
     build: ./backend
     container_name: voice_backend
@@ -23,15 +53,14 @@ services:
     environment:
       - ENVIRONMENT=docker
       - VOICEVOX_URL=http://voicevox:50021
-      - OPENVOICE_SERVICE_URL=http://host.docker.internal:8001  # Use host.docker.internal
-      - D_ID_API_KEY=your-d-id-api-key-here
-      - LOG_LEVEL=INFO
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # Critical for Linux/EC2
+      - OPENVOICE_SERVICE_URL=http://openvoice:8001  # Use container name instead of host.docker.internal
+      - D_ID_API_KEY=${D_ID_API_KEY:-your-d-id-api-key-here}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     networks:
       - voice_network
     depends_on:
       - voicevox
+      - openvoice
     restart: unless-stopped
 
   frontend:
@@ -67,3 +96,6 @@ services:
 networks:
   voice_network:
     driver: bridge
+
+volumes:
+  openvoice-tmp:  # OpenVoice一時ファイル用ボリューム（自動削除）
