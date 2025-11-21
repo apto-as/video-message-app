@@ -3,15 +3,28 @@ import './DIdSelector.css';
 
 const DIdSelector = ({ onSelectionChange = () => {}, disabled = false }) => {
   // プレゼンター機能は削除され、常にカスタム画像を使用
-  const useCustomImage = true;
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     // 常にカスタム画像を使用することを親コンポーネントに通知
     onSelectionChange({
       use_custom_image: true
     });
+
+    // デバッグログ
+    console.log('[DIdSelector] Mounted and selection sent');
   }, [onSelectionChange]);
 
+  // Loading state
+  if (!isMounted) {
+    return (
+      <div className="did-selector loading">
+        <div className="loading-spinner"></div>
+        <p>D-ID設定を読み込み中...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="did-selector">

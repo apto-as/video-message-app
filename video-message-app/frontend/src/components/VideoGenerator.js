@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ImageUpload from './ImageUpload';
 import TextInput from './TextInput';
 import VideoPreview from './VideoPreview';
@@ -7,7 +7,8 @@ import LoadingSpinner from './LoadingSpinner';
 import BackgroundProcessor from './BackgroundProcessor';
 import VoiceVoxSelector from './VoiceVoxSelector';
 import DIdSelector from './DIdSelector';
-import { generateVideoWithVoicevox, generateVideoWithOpenVoice, generateVideoWithDId } from '../services/api';
+import DIdErrorBoundary from './DIdErrorBoundary';
+import { generateVideoWithVoicevox, generateVideoWithOpenVoice } from '../services/api';
 
 const VideoGenerator = () => {
   const [image, setImage] = useState(null);
@@ -18,7 +19,6 @@ const VideoGenerator = () => {
   const [processedImageData, setProcessedImageData] = useState(null);
   const [processingInfo, setProcessingInfo] = useState(null);
   const [selectedVoice, setSelectedVoice] = useState(null);
-  const [videoType, setVideoType] = useState('static'); // 'static' or 'animated'
   const [dIdSelection, setDIdSelection] = useState(null);
   const [audioParams, setAudioParams] = useState({
     speed_scale: 1.0,
@@ -31,6 +31,18 @@ const VideoGenerator = () => {
     enhance_quality: true
   });
 
+  // Timeout detection for DIdSelector initialization
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!dIdSelection) {
+        setError('⚠️ リップシンク設定の初期化に失敗しました。ページを再読み込みしてください。');
+        console.error('[Security] DIdSelector initialization timeout');
+      }
+    }, 3000);
+
+    return () => clearTimeout(timeout);
+  }, [dIdSelection]);
+
   const handleImageProcessed = (processedImage, info) => {
     setProcessedImageData(processedImage);
     setProcessingInfo(info);
@@ -42,15 +54,17 @@ const VideoGenerator = () => {
       return;
     }
 
-    if (videoType === 'animated') {
-      if (!dIdSelection) {
-        setError('D-IDリップシンク設定を選択してください');
-        return;
-      }
-      if (!image) {
-        setError('リップシンク動画生成には画像が必要です');
-        return;
-      }
+    // CRITICAL: DIdSelection validation
+    if (!dIdSelection) {
+      console.error('[Security] dIdSelection is null - DIdSelector may not have mounted');
+      setError('リップシンク設定の初期化に失敗しました。ページを再読み込みしてください。');
+      return;
+    }
+
+    if (!dIdSelection.use_custom_image) {
+      console.error('[Security] use_custom_image is not true');
+      setError('リップシンク設定が不正です。');
+      return;
     }
 
     setLoading(true);
@@ -58,39 +72,20 @@ const VideoGenerator = () => {
 
     try {
       let result;
-      
-      if (videoType === 'animated') {
-        // D-ID リップシンク動画生成
-        // 常にアップロード画像を使用（プレゼンター機能は削除）
-        const imageToUse = processedImageData ? 
-          dataURLToFile(processedImageData, 'processed-image.jpg') : 
-          image;
-        
-        // 音声合成と動画生成を統合して実行
-        if (selectedVoice && selectedVoice.provider === 'voicevox') {
-          result = await generateVideoWithVoicevox(imageToUse, text, selectedVoice, audioParams);
-        } else if (selectedVoice && selectedVoice.provider === 'openvoice') {
-          result = await generateVideoWithOpenVoice(imageToUse, text, selectedVoice, audioParams);
-        } else {
-          throw new Error('音声を選択してください');
-        }
-        
+
+      // D-ID リップシンク動画生成（常にリップシンクモード）
+      // 常にアップロード画像を使用（プレゼンター機能は削除）
+      const imageToUse = processedImageData ?
+        dataURLToFile(processedImageData, 'processed-image.jpg') :
+        image;
+
+      // 音声合成と動画生成を統合して実行
+      if (selectedVoice && selectedVoice.provider === 'voicevox') {
+        result = await generateVideoWithVoicevox(imageToUse, text, selectedVoice, audioParams);
+      } else if (selectedVoice && selectedVoice.provider === 'openvoice') {
+        result = await generateVideoWithOpenVoice(imageToUse, text, selectedVoice, audioParams);
       } else {
-        // 静的動画生成（従来の方式）
-        
-        // 処理済み画像がある場合はそれを使用、なければ元画像を使用
-        const imageToUse = processedImageData ? 
-          dataURLToFile(processedImageData, 'processed-image.jpg') : 
-          image;
-        
-        // プロバイダー別にハイブリッドシステムを使用
-        if (selectedVoice && selectedVoice.provider === 'voicevox') {
-          result = await generateVideoWithVoicevox(imageToUse, text, selectedVoice, audioParams);
-        } else if (selectedVoice && selectedVoice.provider === 'openvoice') {
-          result = await generateVideoWithOpenVoice(imageToUse, text, selectedVoice, audioParams);
-        } else {
-          throw new Error('音声を選択してください');
-        }
+        throw new Error('音声を選択してください');
       }
       
       if (result.success) {
@@ -126,7 +121,6 @@ const VideoGenerator = () => {
     setProcessedImageData(null);
     setProcessingInfo(null);
     setSelectedVoice(null);
-    setVideoType('static');
     setDIdSelection(null);
     setAudioParams({
       speed_scale: 1.0,
@@ -142,14 +136,9 @@ const VideoGenerator = () => {
 
   const canGenerate = () => {
     if (!text.trim() || loading) return false;
-    
-    if (videoType === 'animated') {
-      // リップシンク動画の場合、常に画像が必要（プレゼンター機能は削除済み）
-      return dIdSelection && image;
-    }
-    
-    // 静的動画の場合は画像が必要
-    return image;
+
+    // リップシンク動画の場合、常に画像とDIdSelectionが必要
+    return dIdSelection && image;
   };
 
   return (
@@ -189,51 +178,20 @@ const VideoGenerator = () => {
           )}
           
           <TextInput value={text} onChange={setText} />
-          
-          {/* 動画タイプ選択 */}
-          <div className="video-type-selection">
-            <h4>🎥 動画タイプ</h4>
-            <div className="video-type-options">
-              <label className={`video-type-option ${videoType === 'static' ? 'active' : ''}`}>
-                <input
-                  type="radio"
-                  name="videoType"
-                  value="static"
-                  checked={videoType === 'static'}
-                  onChange={(e) => setVideoType(e.target.value)}
-                  disabled={loading}
-                />
-                <span>📸 静止画 + 音声</span>
-                <small>画像と音声を組み合わせたシンプルな動画</small>
-              </label>
-              <label className={`video-type-option ${videoType === 'animated' ? 'active' : ''}`}>
-                <input
-                  type="radio"
-                  name="videoType"
-                  value="animated"
-                  checked={videoType === 'animated'}
-                  onChange={(e) => setVideoType(e.target.value)}
-                  disabled={loading}
-                />
-                <span>🎭 リップシンク動画</span>
-                <small>D-IDによるリップシンク（口の動きを音声に同期）</small>
-              </label>
-            </div>
-          </div>
-          
-          <VoiceVoxSelector 
+
+          <VoiceVoxSelector
             selectedVoice={selectedVoice}
             onVoiceSelect={setSelectedVoice}
             showCloneOption={true}
           />
-          
-          {/* D-ID設定（アニメーション動画の場合のみ表示） */}
-          {videoType === 'animated' && (
-            <DIdSelector 
+
+          {/* D-ID設定（常に表示） */}
+          <DIdErrorBoundary>
+            <DIdSelector
               onSelectionChange={setDIdSelection}
               disabled={loading}
             />
-          )}
+          </DIdErrorBoundary>
           
           {selectedVoice && selectedVoice.provider === 'voicevox' && (
             <div className="voicevox-params">
@@ -371,94 +329,17 @@ const VideoGenerator = () => {
             </div>
           )}
           
-          <button 
-            onClick={handleGenerate} 
+          <button
+            onClick={handleGenerate}
             disabled={!canGenerate()}
             className={`generate-button ${canGenerate() ? 'active' : 'disabled'}`}
           >
-            {videoType === 'animated' 
-              ? '🎭 リップシンク動画を生成' 
-              : processedImageData 
-                ? '🎨 処理済み画像で動画を生成' 
-                : '📹 動画を生成'
-            }
+            {loading ? '生成中...' : '🎬 リップシンク動画を生成'}
           </button>
         </div>
       )}
       
       <style>{`
-        .video-type-selection {
-          margin: 20px 0;
-          padding: 20px;
-          border: 1px solid #007bff;
-          border-radius: 8px;
-          background-color: #f8f9fa;
-        }
-        
-        .video-type-selection h4 {
-          margin: 0 0 15px 0;
-          color: #007bff;
-          font-size: 16px;
-          font-weight: 600;
-        }
-        
-        .video-type-options {
-          display: flex;
-          flex-direction: column;
-          gap: 15px;
-        }
-        
-        .video-type-option {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          padding: 15px;
-          border: 2px solid #dee2e6;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          background-color: white;
-        }
-        
-        .video-type-option:hover {
-          border-color: #007bff;
-          background-color: #f8f9fa;
-        }
-        
-        .video-type-option.active {
-          border-color: #007bff;
-          background-color: #e7f3ff;
-          box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
-        }
-        
-        .video-type-option input[type="radio"] {
-          display: none;
-        }
-        
-        .video-type-option span {
-          font-size: 16px;
-          font-weight: 600;
-          color: #495057;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        
-        .video-type-option.active span {
-          color: #007bff;
-        }
-        
-        .video-type-option small {
-          color: #6c757d;
-          font-size: 14px;
-          line-height: 1.4;
-          margin-top: 4px;
-        }
-        
-        .video-type-option.active small {
-          color: #495057;
-        }
-
         .processing-status {
           margin: 15px 0;
           padding: 15px;

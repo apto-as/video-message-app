@@ -5,6 +5,17 @@ httpx==0.25.2
 python-dotenv==1.0.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
+
+# Rate limiting and caching
+redis==5.0.1
+aiohttp==3.9.1
+tenacity==8.2.3
+psutil==5.9.8  # システムリソース監視用
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
 rembg==2.0.67
 onnxruntime==1.21.1
 pillow>=10.0.0,<11.0.0
@@ -23,5 +34,16 @@ soundfile>=0.12.0
 pydub>=0.25.0
 ffmpeg-python>=0.2.0
 
+# Prosody調整エンジン用
+librosa>=0.10.0
+resampy>=0.4.2  # librosaの高品質リサンプリング用
+
 # Mac環境用追加依存関係
 scipy>=1.7.0; sys_platform == "darwin"
+
+# YOLOv8 Person Detection
+# Note: Using torch 2.0.0 to match torchvision 0.15.1 requirement
+# CUDA support (EC2 only): pip install torch==2.0.1+cu118 torchvision==0.15.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+torch==2.0.0
+torchvision==0.15.1
+ultralytics==8.0.196
