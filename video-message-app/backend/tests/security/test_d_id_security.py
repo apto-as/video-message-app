@@ -25,7 +25,7 @@ class TestDIdValidator:
         """有効なAPI Key形式"""
         # Base64エンコード済みの形式
         valid_keys = [
-            "YmlsbEBuZXVyb2F4aXMuYWk6dXp1NzhGYUo=",
+            "bW9jazp0ZXN0a2V5MTIzNDU2Nzg5MA==",  # mock:testkey1234567890
             "dGVzdDp0ZXN0a2V5MTIzNDU2Nzg5MA==",
             "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU2Nzg5"
         ]
@@ -170,10 +170,10 @@ class TestDIdValidator:
 
     def test_sanitize_error_message(self):
         """エラーメッセージのサニタイズ"""
-        # API Key漏洩防止
-        error_with_key = "Authentication failed: YmlsbEBuZXVyb2F4aXMuYWk6dXp1NzhGYUo="
+        # API Key漏洩防止（モックAPIキー使用）
+        error_with_key = "Authentication failed: bW9jazp0ZXN0a2V5MTIzNDU2Nzg5MA=="
         sanitized = DIdValidator.sanitize_error_message(error_with_key)
-        assert "YmlsbEBuZXVyb2F4aXMuYWk6dXp1NzhGYUo=" not in sanitized
+        assert "bW9jazp0ZXN0a2V5MTIzNDU2Nzg5MA==" not in sanitized
         assert "[REDACTED]" in sanitized
 
         # URL漏洩防止
@@ -366,8 +366,8 @@ class TestIntegration:
 
     def test_end_to_end_video_generation_security(self):
         """動画生成のエンドツーエンドセキュリティ"""
-        # 1. API Key検証
-        api_key = "YmlsbEBuZXVyb2F4aXMuYWk6dXp1NzhGYUo="
+        # 1. API Key検証（モックAPIキー使用）
+        api_key = "bW9jazp0ZXN0a2V5MTIzNDU2Nzg5MA=="  # mock:testkey1234567890
         assert DIdValidator.validate_api_key(api_key) is True
 
         # 2. 画像URL検証

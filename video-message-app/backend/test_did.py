@@ -10,7 +10,7 @@ from core.config import settings
 async def test_did_api():
     """D-ID APIの基本接続テスト"""
     print("🔍 D-ID API接続テスト開始...")
-    print(f"APIキー: {settings.did_api_key[:20]}...")
+    print(f"APIキー: {'*' * 10}... (検証済み)")
     
     # 公開されているテスト画像URLを使用
     test_image_url = "https://d-id-public-bucket.s3.us-west-2.amazonaws.com/alice.jpg"
