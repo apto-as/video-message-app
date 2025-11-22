@@ -1,10 +1,16 @@
 """
 Structured logging configuration for production environment
+
+Security Features:
+- Sensitive data filtering (passwords, API keys, tokens)
+- PII masking (emails, phone numbers, credit cards)
+- Regex-based log scrubbing
 """
 
 import logging
 import sys
 import json
+import re
 from typing import Any, Dict, Optional
 from datetime import datetime
 from pathlib import Path
@@ -24,22 +30,51 @@ DEBUG = logging.DEBUG
 
 class SensitiveDataFilter(logging.Filter):
     """Filter to remove sensitive data from logs"""
-    
+
     SENSITIVE_KEYS = {
         'password', 'token', 'secret', 'api_key', 'd_id_api_key',
         'authorization', 'cookie', 'session', 'credit_card',
         'ssn', 'email', 'phone', 'api_secret'
     }
-    
+
+    # Regex patterns for PII detection
+    PII_PATTERNS = {
+        'email': re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
+        'phone': re.compile(r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b'),  # US format
+        'credit_card': re.compile(r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b'),
+        'ssn': re.compile(r'\b\d{3}-\d{2}-\d{4}\b'),
+        'api_key': re.compile(r'\b(sk|pk|AKIA)[_-]?[a-zA-Z0-9]{24,}\b'),
+        'bearer_token': re.compile(r'Bearer\s+[A-Za-z0-9\-._~+/]+=*', re.IGNORECASE),
+    }
+
     def filter(self, record):
         """Filter sensitive data from log records"""
+        # Scrub message content
+        if hasattr(record, 'msg') and isinstance(record.msg, str):
+            record.msg = self._scrub_message(record.msg)
+
+        # Scrub dict-based logging
         if hasattr(record, 'msg_dict'):
             self._mask_dict(record.msg_dict)
         if hasattr(record, 'args'):
             if isinstance(record.args, dict):
                 self._mask_dict(record.args)
+            elif isinstance(record.args, tuple):
+                # Scrub tuple args (for % formatting)
+                record.args = tuple(
+                    self._scrub_message(arg) if isinstance(arg, str) else arg
+                    for arg in record.args
+                )
+
         return True
-    
+
+    def _scrub_message(self, message: str) -> str:
+        """Scrub PII and sensitive data from message content using regex"""
+        scrubbed = message
+        for pii_type, pattern in self.PII_PATTERNS.items():
+            scrubbed = pattern.sub(f'***REDACTED_{pii_type.upper()}***', scrubbed)
+        return scrubbed
+
     def _mask_dict(self, data: Dict[str, Any]):
         """Recursively mask sensitive data in dictionaries"""
         for key in list(data.keys()):
@@ -48,6 +83,9 @@ class SensitiveDataFilter(logging.Filter):
                 data[key] = "***REDACTED***"
             elif isinstance(data[key], dict):
                 self._mask_dict(data[key])
+            elif isinstance(data[key], str):
+                # Also scrub string values for PII
+                data[key] = self._scrub_message(data[key])
             elif isinstance(data[key], list):
                 for item in data[key]:
                     if isinstance(item, dict):
