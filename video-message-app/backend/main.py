@@ -5,7 +5,7 @@ from slowapi.errors import RateLimitExceeded
 import uvicorn
 import time
 import os
-from routers import voice, voicevox, unified_voice, voice_clone, background, d_id, websocket, sse, video_generation
+from routers import voice, voicevox, unified_voice, voice_clone, background, d_id, websocket, sse
 from core.config import settings
 
 # Optional: Person Detection (Phase 2 feature - requires YOLO dependencies)
@@ -15,6 +15,13 @@ try:
 except ImportError:
     PERSON_DETECTION_AVAILABLE = False
     logger = None  # Will be set after logging is initialized
+
+# Optional: Video Generation (Phase 2 feature - requires torch for video pipeline)
+try:
+    from routers import video_generation
+    VIDEO_GENERATION_AVAILABLE = True
+except ImportError:
+    VIDEO_GENERATION_AVAILABLE = False
 from core.logging import setup_logging, get_logger, log_api_request, log_error, log_info
 from services.progress_tracker import progress_tracker
 from middleware.rate_limiter import limiter, rate_limit_exceeded_handler, check_redis_health
@@ -74,7 +81,13 @@ else:
 
 app.include_router(websocket.router, prefix="/api", tags=["websocket"])
 app.include_router(sse.router, prefix="/api", tags=["sse"])
-app.include_router(video_generation.router, tags=["video-generation"])
+
+# Optional: Video Generation (Phase 2 - 2025年12月)
+if VIDEO_GENERATION_AVAILABLE:
+    app.include_router(video_generation.router, tags=["video-generation"])
+    log_info("Video generation router enabled (torch dependencies available)")
+else:
+    logger.warning("Video generation router disabled (torch dependencies not installed)")
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
