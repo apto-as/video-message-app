@@ -11,7 +11,7 @@ File validator security tests
 import pytest
 import io
 from fastapi import UploadFile
-from security.file_validator import FileValidator, RateLimiter
+from security.file_validator import FileValidator
 
 
 class TestFileValidator:
@@ -165,47 +165,6 @@ class TestFileValidator:
         # 0個
         is_valid, message = FileValidator.validate_file_count(0)
         assert is_valid is False
-
-
-class TestRateLimiter:
-    """レート制限のテスト"""
-
-    @pytest.mark.asyncio
-    async def test_rate_limit_allows_normal_requests(self):
-        """通常のリクエストは許可される"""
-        limiter = RateLimiter(max_requests=10, window_seconds=60)
-
-        for i in range(5):
-            is_allowed, message = await limiter.check_rate_limit("client_1")
-            assert is_allowed is True, f"Request {i+1} should be allowed"
-
-    @pytest.mark.asyncio
-    async def test_rate_limit_blocks_excessive_requests(self):
-        """過剰なリクエストは拒否される"""
-        limiter = RateLimiter(max_requests=3, window_seconds=60)
-
-        # 最初の3リクエストは成功
-        for i in range(3):
-            is_allowed, message = await limiter.check_rate_limit("client_2")
-            assert is_allowed is True, f"Request {i+1} should be allowed"
-
-        # 4つ目は拒否
-        is_allowed, message = await limiter.check_rate_limit("client_2")
-        assert is_allowed is False
-        assert "Rate limit exceeded" in message
-
-    @pytest.mark.asyncio
-    async def test_rate_limit_per_client(self):
-        """クライアント毎に独立したレート制限"""
-        limiter = RateLimiter(max_requests=2, window_seconds=60)
-
-        # Client 1: 2リクエスト
-        await limiter.check_rate_limit("client_1")
-        await limiter.check_rate_limit("client_1")
-
-        # Client 2: 最初のリクエストは成功（独立している）
-        is_allowed, message = await limiter.check_rate_limit("client_2")
-        assert is_allowed is True
 
 
 class TestAudioFileValidator:

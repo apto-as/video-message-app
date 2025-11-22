@@ -48,6 +48,22 @@ app.include_router(sse.router, prefix="/api", tags=["sse"])
 app.include_router(video_generation.router, tags=["video-generation"])
 
 @app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses"""
+    response = await call_next(request)
+
+    # セキュリティヘッダー追加
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
+    return response
+
+@app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Log all API requests and responses"""
     start_time = time.time()
