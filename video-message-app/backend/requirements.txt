@@ -7,6 +7,7 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 
 # Rate limiting and caching
+slowapi==0.1.9  # FastAPI rate limiting middleware
 redis==5.0.1
 aiohttp==3.9.1
 tenacity==8.2.3

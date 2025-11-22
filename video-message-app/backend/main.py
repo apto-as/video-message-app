@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 import uvicorn
 import time
 import os
@@ -8,6 +9,7 @@ from routers import voice, voicevox, unified_voice, voice_clone, background, d_i
 from core.config import settings
 from core.logging import setup_logging, get_logger, log_api_request, log_error, log_info
 from services.progress_tracker import progress_tracker
+from middleware.rate_limiter import limiter, rate_limit_exceeded_handler, check_redis_health
 
 # Setup logging
 is_production = os.path.exists('/home/ec2-user')
@@ -18,6 +20,10 @@ setup_logging(level=log_level, json_format=is_production)
 logger = get_logger(__name__)
 
 app = FastAPI(title="Video Message API", version="1.0.0")
+
+# Rate limiter setup
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # Log startup
 log_info(
@@ -126,6 +132,14 @@ async def health_check():
 async def startup_event():
     """Initialize services on startup"""
     log_info("Starting up services...")
+
+    # Check Redis health for rate limiting
+    redis_healthy = await check_redis_health()
+    if redis_healthy:
+        log_info("Redis connection healthy - rate limiting enabled")
+    else:
+        logger.warning("Redis connection failed - rate limiting may not work properly")
+
     await progress_tracker.start()
     log_info("Progress tracker started")
 

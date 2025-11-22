@@ -3,7 +3,7 @@
 VOICEVOX、OpenVoice、D-IDを統一インターフェースで提供
 """
 
-from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, BackgroundTasks, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -21,6 +21,7 @@ from services.unified_voice_service import (
     VoiceProfile,
     VoiceSynthesisRequest
 )
+from middleware.rate_limiter import limiter, SYNTHESIS_LIMIT
 
 router = APIRouter(prefix="/unified-voice", tags=["Unified Voice"])
 
@@ -107,52 +108,60 @@ async def get_voice_profile(
         raise HTTPException(status_code=500, detail=f"音声プロファイル取得エラー: {str(e)}")
 
 @router.post("/synthesize")
+@limiter.limit(SYNTHESIS_LIMIT)
 async def synthesize_speech(
-    request: SynthesisRequestAPI,
+    request_data: SynthesisRequestAPI,
+    request: Request,
     service: UnifiedVoiceService = Depends(get_unified_voice_service)
 ):
-    """音声合成実行"""
+    """
+    音声合成実行（レート制限: 10 requests/minute per user）
+
+    Security:
+    - Rate limited to 10 requests/minute per user
+    - Prevents abuse and ensures fair resource allocation
+    """
     import logging
     logger = logging.getLogger(__name__)
-    
+
     try:
-        logger.info(f"音声合成リクエスト受信: text={request.text[:30]}..., voice_profile={request.voice_profile}, voice_profile_id={request.voice_profile_id}")
-        
+        logger.info(f"音声合成リクエスト受信: text={request_data.text[:30]}..., voice_profile={request_data.voice_profile}, voice_profile_id={request_data.voice_profile_id}")
+
         # 音声プロファイル取得または直接使用
-        if request.voice_profile:
+        if request_data.voice_profile:
             # 直接voice_profileオブジェクトが渡された場合、IDから完全なプロファイルを取得
-            profile_id = request.voice_profile.get('id')
+            profile_id = request_data.voice_profile.get('id')
             if profile_id:
                 voice_profile = await service.get_voice_profile(profile_id)
                 if voice_profile is None:
                     # サービス内にプロファイルが見つからない場合は、Dictから VoiceProfile を作成
                     voice_profile = VoiceProfile(
                         id=profile_id,
-                        name=request.voice_profile.get('name', 'Unknown'),
-                        provider=VoiceProvider(request.voice_profile.get('provider', 'openvoice')),
-                        voice_type=VoiceType(request.voice_profile.get('voice_type', 'cloned')),
-                        language=request.voice_profile.get('language', 'ja'),
-                        voice_file_path=request.voice_profile.get('voice_file_path'),
-                        metadata=request.voice_profile.get('metadata', {})
+                        name=request_data.voice_profile.get('name', 'Unknown'),
+                        provider=VoiceProvider(request_data.voice_profile.get('provider', 'openvoice')),
+                        voice_type=VoiceType(request_data.voice_profile.get('voice_type', 'cloned')),
+                        language=request_data.voice_profile.get('language', 'ja'),
+                        voice_file_path=request_data.voice_profile.get('voice_file_path'),
+                        metadata=request_data.voice_profile.get('metadata', {})
                     )
             else:
                 raise HTTPException(status_code=400, detail="voice_profileにIDが含まれていません")
-        elif request.voice_profile_id:
+        elif request_data.voice_profile_id:
             # voice_profile_idから取得
-            voice_profile = await service.get_voice_profile(request.voice_profile_id)
+            voice_profile = await service.get_voice_profile(request_data.voice_profile_id)
             if voice_profile is None:
                 raise HTTPException(status_code=404, detail="指定された音声プロファイルが見つかりません")
         else:
             raise HTTPException(status_code=400, detail="voice_profileまたはvoice_profile_idが必要です")
-        
+
         # 音声合成リクエスト作成
         synthesis_request = VoiceSynthesisRequest(
-            text=request.text,
+            text=request_data.text,
             voice_profile=voice_profile,
-            speed=request.speed,
-            pitch=request.pitch,
-            volume=request.volume,
-            emotion=request.emotion
+            speed=request_data.speed,
+            pitch=request_data.pitch,
+            volume=request_data.volume,
+            emotion=request_data.emotion
         )
         
         # 音声合成実行
