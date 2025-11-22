@@ -111,8 +111,14 @@ class OptimizedDIdClient:
     @property
     def headers(self) -> Dict[str, str]:
         """API request headers"""
+        import base64
+
+        # D-ID API uses Basic authentication with base64(api_key:)
+        # Format: "Basic {base64encode(api_key + ':')}"
+        encoded_key = base64.b64encode(f"{self.api_key}:".encode()).decode()
+
         return {
-            "Authorization": f"Basic {self.api_key}",
+            "Authorization": f"Basic {encoded_key}",
             "Content-Type": "application/json"
         }
 

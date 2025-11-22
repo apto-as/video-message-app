@@ -6,7 +6,11 @@ import os
 class Settings(BaseSettings):
     cors_origins: List[str] = Field(default_factory=lambda: os.getenv("CORS_ORIGINS", "http://localhost:55434").split(","))
     max_file_size: int = 5 * 1024 * 1024  # 5MB
-    did_api_key: Optional[str] = None  # D-ID API key for lip-sync video generation
+    did_api_key: Optional[str] = Field(
+        default=None,
+        alias="DID_API_KEY",
+        description="D-ID API key for lip-sync video generation"
+    )
     
     # 環境変数パス管理
     docker_env: str = os.environ.get('DOCKER_ENV', 'false')
