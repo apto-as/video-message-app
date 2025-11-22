@@ -388,6 +388,91 @@ class OptimizedDIdClient:
             logger.error(f"Failed to get status: {e}")
             return {"error": "Failed to get status"}
 
+    async def create_talking_avatar(
+        self,
+        photo_path: str,
+        audio_path: str,
+        priority: Priority = Priority.NORMAL,
+        config: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Create talking avatar video from photo and audio files
+
+        This is a convenience method that:
+        1. Uploads photo to D-ID
+        2. Uploads audio to D-ID
+        3. Creates lip-sync video
+        4. Waits for completion
+        5. Returns video URL
+
+        Args:
+            photo_path: Path to photo file
+            audio_path: Path to audio file
+            priority: Request priority
+            config: Additional configuration options
+
+        Returns:
+            Generated video URL
+
+        Raises:
+            FileNotFoundError: If files don't exist
+            DIdAPIError: If video generation fails
+        """
+        import aiofiles
+        from pathlib import Path
+
+        # Validate files exist
+        photo_file = Path(photo_path)
+        audio_file = Path(audio_path)
+
+        if not photo_file.exists():
+            raise FileNotFoundError(f"Photo file not found: {photo_path}")
+        if not audio_file.exists():
+            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+
+        logger.info(
+            f"Creating talking avatar: photo={photo_file.name}, "
+            f"audio={audio_file.name}"
+        )
+
+        # Upload photo
+        async with aiofiles.open(photo_path, 'rb') as f:
+            photo_data = await f.read()
+
+        source_url = await self.upload_image(
+            image_data=photo_data,
+            filename=photo_file.name,
+            priority=priority
+        )
+        logger.info(f"Photo uploaded: {source_url}")
+
+        # Upload audio
+        async with aiofiles.open(audio_path, 'rb') as f:
+            audio_data = await f.read()
+
+        audio_url = await self.upload_audio(
+            audio_data=audio_data,
+            filename=audio_file.name,
+            priority=priority
+        )
+        logger.info(f"Audio uploaded: {audio_url}")
+
+        # Create talk video
+        result = await self.create_talk_video(
+            audio_url=audio_url,
+            source_url=source_url,
+            priority=priority,
+            config=config
+        )
+
+        # Extract video URL
+        video_url = result.get("result_url")
+        if not video_url:
+            raise DIdAPIError("Failed to get video URL from result")
+
+        logger.info(f"Talking avatar created: {video_url}")
+        return video_url
+
     async def get_stats(self) -> Dict[str, Any]:
         """
         Get client statistics

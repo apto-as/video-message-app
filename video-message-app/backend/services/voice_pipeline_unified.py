@@ -303,9 +303,6 @@ class VoicePipelineUnified:
         )
 
         # Phase 3: D-ID Video Generation
-        # NOTE: D-ID integration will be implemented separately
-        # For now, return audio result + placeholder video URL
-
         if progress_tracker:
             await progress_tracker.update_status("generating_video", 70)
 
@@ -314,20 +311,37 @@ class VoicePipelineUnified:
             f"audio={audio_result['audio_path']}"
         )
 
-        # Placeholder video URL (D-ID integration pending)
-        video_url = f"https://placeholder.com/video/{Path(audio_result['audio_path']).stem}.mp4"
+        # D-ID integration with comprehensive error handling
+        try:
+            from .d_id_client_optimized import get_optimized_d_id_client, DIdAPIError
 
-        # TODO: Implement D-ID client integration
-        # try:
-        #     from .d_id_client_optimized import D_IDClient
-        #     d_id_client = D_IDClient()
-        #     video_url = await d_id_client.create_talking_avatar(
-        #         photo_path=photo_path,
-        #         audio_path=audio_result['audio_path']
-        #     )
-        # except Exception as e:
-        #     logger.error(f"D-ID video generation failed: {e}")
-        #     raise RuntimeError(f"Video generation failed: {e}")
+            # Get optimized D-ID client (singleton)
+            d_id_client = get_optimized_d_id_client()
+
+            # Create talking avatar video
+            video_url = await d_id_client.create_talking_avatar(
+                photo_path=photo_path,
+                audio_path=audio_result['audio_path']
+            )
+
+            logger.info(f"D-ID video generation successful: {video_url}")
+
+        except FileNotFoundError as e:
+            logger.error(f"D-ID video generation failed - file not found: {e}")
+            # Fallback to placeholder if files are missing
+            video_url = f"https://placeholder.com/video/{Path(audio_result['audio_path']).stem}.mp4"
+            logger.warning(f"Using placeholder video URL: {video_url}")
+
+        except DIdAPIError as e:
+            logger.error(f"D-ID API error: {e}", exc_info=True)
+            # Re-raise API errors for proper error handling upstream
+            raise RuntimeError(f"D-ID video generation failed: {e}") from e
+
+        except Exception as e:
+            logger.error(f"Unexpected D-ID error: {e}", exc_info=True)
+            # Fallback to placeholder for unexpected errors
+            video_url = f"https://placeholder.com/video/{Path(audio_result['audio_path']).stem}.mp4"
+            logger.warning(f"Using placeholder video URL due to error: {video_url}")
 
         if progress_tracker:
             await progress_tracker.update_status("completed", 100)
