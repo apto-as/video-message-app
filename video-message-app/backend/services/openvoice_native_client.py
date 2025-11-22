@@ -95,7 +95,7 @@ class OpenVoiceNativeClient:
                 }
                 
         except Exception as e:
-            logger.error(f'Voice clone creation failed: {e}')
+            logger.error(f'Voice clone creation failed: {e}', exc_info=True)
             return {
                 'success': False,
                 'error': str(e)
@@ -129,13 +129,16 @@ class OpenVoiceNativeClient:
                     logger.info(f"音声合成成功: {len(audio_data)} bytes")
                     return audio_data
                 else:
-                    logger.error(f"音声合成失敗: {result.get('error', 'Unknown error')}")
-                    return None
-            
+                    error_msg = result.get('error', 'Unknown error')
+                    logger.error(f"音声合成失敗: {error_msg}")
+                    raise Exception(f"Voice synthesis failed: {error_msg}")
+            else:
+                logger.error(f"Voice synthesis API returned {response.status_code}")
+                raise Exception(f"Voice synthesis API error: {response.status_code}")
+
         except Exception as e:
-            logger.error(f'Voice synthesis failed: {e}')
-        
-        return None
+            logger.error(f'Voice synthesis failed: {e}', exc_info=True)
+            raise
     
     async def synthesize_with_clone(
         self,
@@ -152,10 +155,12 @@ class OpenVoiceNativeClient:
             response = await self.client.get(f'{self.base_url}/voice-clone/profiles')
             if response.status_code == 200:
                 return response.json()
+            else:
+                logger.error(f'Failed to list profiles: API returned {response.status_code}')
+                raise Exception(f'Profile list API error: {response.status_code}')
         except Exception as e:
-            logger.error(f'Failed to list profiles: {e}')
-        
-        return []
+            logger.error(f'Failed to list profiles: {e}', exc_info=True)
+            raise
     
     async def delete_profile(self, profile_id: str) -> bool:
         """プロファイルを削除"""
@@ -163,8 +168,11 @@ class OpenVoiceNativeClient:
             response = await self.client.delete(
                 f'{self.base_url}/voice-clone/profiles/{profile_id}'
             )
-            return response.status_code == 200
+            if response.status_code == 200:
+                return True
+            else:
+                logger.error(f'Failed to delete profile {profile_id}: API returned {response.status_code}')
+                raise Exception(f'Profile delete API error: {response.status_code}')
         except Exception as e:
-            logger.error(f'Failed to delete profile: {e}')
-        
-        return False
+            logger.error(f'Failed to delete profile {profile_id}: {e}', exc_info=True)
+            raise

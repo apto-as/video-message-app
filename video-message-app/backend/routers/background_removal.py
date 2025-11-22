@@ -1,6 +1,6 @@
 """Background removal API endpoints"""
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 from pathlib import Path
 import uuid
 import logging
@@ -54,11 +54,14 @@ async def health_check():
             "fp16_enabled": remover.use_fp16
         }
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        }
+        logger.error(f"Health check failed: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "error": str(e)
+            }
+        )
 
 
 @router.post("/remove")
