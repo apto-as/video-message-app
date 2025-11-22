@@ -42,9 +42,11 @@ resampy>=0.4.2  # librosaの高品質リサンプリング用
 # Mac環境用追加依存関係
 scipy>=1.7.0; sys_platform == "darwin"
 
-# YOLOv8 Person Detection
+# YOLOv8 Person Detection (Phase 2 - 2025年12月)
+# Temporarily disabled to save disk space during deployment
+# Uncomment when implementing person detection feature
 # Note: Using torch 2.0.0 to match torchvision 0.15.1 requirement
 # CUDA support (EC2 only): pip install torch==2.0.1+cu118 torchvision==0.15.1+cu118 --index-url https://download.pytorch.org/whl/cu118
-torch==2.0.0
-torchvision==0.15.1
-ultralytics==8.0.196
+# torch==2.0.0
+# torchvision==0.15.1
+# ultralytics==8.0.196
