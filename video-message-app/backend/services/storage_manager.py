@@ -50,6 +50,7 @@ class FileMetadata:
     tier: StorageTier
     created_at: datetime
     size_bytes: int
+    user_id: Optional[str] = None  # User isolation
     task_id: Optional[str] = None
     metadata: Dict[str, Any] = None
 
@@ -59,6 +60,7 @@ class FileMetadata:
             "tier": self.tier.value,
             "created_at": self.created_at.isoformat(),
             "size_bytes": self.size_bytes,
+            "user_id": self.user_id,
             "task_id": self.task_id,
             "metadata": self.metadata or {}
         }
@@ -77,15 +79,31 @@ class FileMetadata:
 
 class StorageManager:
     """
-    Centralized storage management with automatic cleanup
+    Centralized storage management with automatic cleanup and user isolation
 
-    Directory Structure:
+    Directory Structure (User-Isolated):
     storage_root/
-    ├── uploads/          # User-uploaded files (7 days)
-    ├── processed/        # Intermediate processing files (3 days)
-    ├── videos/           # Generated videos (30 days)
-    ├── temp/             # Temporary files (1 hour)
-    └── metadata.json     # File tracking metadata
+    ├── users/
+    │   ├── user_123/
+    │   │   ├── uploads/      # User uploads (7 days)
+    │   │   ├── processed/    # Intermediate files (3 days)
+    │   │   ├── videos/       # Generated videos (30 days)
+    │   │   └── temp/         # Temporary files (1 hour)
+    │   └── user_456/
+    │       └── ...
+    └── metadata.json         # File tracking metadata
+
+    Legacy Structure (Backward Compatible):
+    storage_root/
+    ├── uploads/
+    ├── processed/
+    ├── videos/
+    └── temp/
+
+    Security:
+    - User isolation prevents cross-user file access
+    - Files stored in user-specific directories
+    - Metadata tracks user_id for audit trails
     """
 
     def __init__(
@@ -126,6 +144,7 @@ class StorageManager:
                             tier=StorageTier(value["tier"]),
                             created_at=datetime.fromisoformat(value["created_at"]),
                             size_bytes=value["size_bytes"],
+                            user_id=value.get("user_id"),
                             task_id=value.get("task_id"),
                             metadata=value.get("metadata")
                         )
@@ -159,26 +178,44 @@ class StorageManager:
                 pass
             logger.info("StorageManager background tasks stopped")
 
-    def get_tier_path(self, tier: StorageTier) -> Path:
-        """Get directory path for storage tier"""
-        return self.storage_root / tier.value
+    def get_tier_path(self, tier: StorageTier, user_id: Optional[str] = None) -> Path:
+        """
+        Get directory path for storage tier (with optional user isolation)
+
+        Args:
+            tier: Storage tier
+            user_id: User ID for isolation (if None, uses legacy path)
+
+        Returns:
+            Path to tier directory
+        """
+        if user_id:
+            # User-isolated path: storage_root/users/{user_id}/{tier}/
+            user_path = self.storage_root / "users" / user_id / tier.value
+            user_path.mkdir(parents=True, exist_ok=True)
+            return user_path
+        else:
+            # Legacy path: storage_root/{tier}/
+            return self.storage_root / tier.value
 
     async def store_file(
         self,
         source_path: Path,
         tier: StorageTier,
         filename: Optional[str] = None,
+        user_id: Optional[str] = None,
         task_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         move: bool = False
     ) -> Path:
         """
-        Store file in specified tier
+        Store file in specified tier (with user isolation)
 
         Args:
             source_path: Source file path
             tier: Storage tier
             filename: Optional custom filename
+            user_id: User ID for isolation (recommended for multi-tenant security)
             task_id: Associated task ID
             metadata: Additional metadata
             move: If True, move file instead of copy
@@ -189,16 +226,16 @@ class StorageManager:
         if not source_path.exists():
             raise FileNotFoundError(f"Source file not found: {source_path}")
 
-        # Determine destination
+        # Determine destination (user-isolated or legacy)
         dest_filename = filename or source_path.name
-        dest_path = self.get_tier_path(tier) / dest_filename
+        dest_path = self.get_tier_path(tier, user_id) / dest_filename
 
         # Ensure unique filename
         counter = 1
         while dest_path.exists():
             stem = dest_path.stem
             suffix = dest_path.suffix
-            dest_path = self.get_tier_path(tier) / f"{stem}_{counter}{suffix}"
+            dest_path = self.get_tier_path(tier, user_id) / f"{stem}_{counter}{suffix}"
             counter += 1
 
         try:
@@ -208,12 +245,13 @@ class StorageManager:
             else:
                 shutil.copy2(str(source_path), str(dest_path))
 
-            # Record metadata
+            # Record metadata (with user_id for isolation)
             file_meta = FileMetadata(
                 file_path=dest_path,
                 tier=tier,
                 created_at=datetime.utcnow(),
                 size_bytes=dest_path.stat().st_size,
+                user_id=user_id,
                 task_id=task_id,
                 metadata=metadata
             )
@@ -257,6 +295,49 @@ class StorageManager:
         except Exception as e:
             logger.error(f"Failed to delete {file_path}: {e}")
             return False
+
+    def get_user_files(self, user_id: str, tier: Optional[StorageTier] = None) -> List[FileMetadata]:
+        """
+        Get all files for a specific user (user isolation helper)
+
+        Args:
+            user_id: User ID
+            tier: Optional storage tier filter
+
+        Returns:
+            List of FileMetadata for user's files
+        """
+        user_files = [
+            meta for meta in self._metadata.values()
+            if meta.user_id == user_id
+        ]
+
+        if tier:
+            user_files = [f for f in user_files if f.tier == tier]
+
+        return user_files
+
+    def verify_user_access(self, file_path: Path, user_id: str) -> bool:
+        """
+        Verify that a user has access to a file (security check)
+
+        Args:
+            file_path: File path to check
+            user_id: User ID requesting access
+
+        Returns:
+            True if user owns the file, False otherwise
+        """
+        file_key = str(file_path)
+        if file_key not in self._metadata:
+            # File not tracked, deny by default
+            return False
+
+        meta = self._metadata[file_key]
+        # Allow access if:
+        # 1. User owns the file (user_id matches)
+        # 2. File has no user_id (legacy/shared file)
+        return meta.user_id == user_id or meta.user_id is None
 
     async def cleanup_tier(self, tier: StorageTier) -> Dict[str, Any]:
         """
