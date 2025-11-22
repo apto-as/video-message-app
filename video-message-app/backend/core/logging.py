@@ -39,12 +39,18 @@ class SensitiveDataFilter(logging.Filter):
 
     # Regex patterns for PII detection
     PII_PATTERNS = {
+        # US/International patterns
         'email': re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
         'phone': re.compile(r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b'),  # US format
         'credit_card': re.compile(r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b'),
         'ssn': re.compile(r'\b\d{3}-\d{2}-\d{4}\b'),
         'api_key': re.compile(r'\b(sk|pk|AKIA)[_-]?[a-zA-Z0-9]{24,}\b'),
         'bearer_token': re.compile(r'Bearer\s+[A-Za-z0-9\-._~+/]+=*', re.IGNORECASE),
+
+        # Japanese patterns (H-1: GDPR compliance for Japanese users)
+        'jp_phone': re.compile(r'\b(0\d{1,4}-\d{1,4}-\d{4})\b'),  # 090-1234-5678, 03-1234-5678
+        'jp_postal': re.compile(r'〒\d{3}-\d{4}'),  # 〒123-4567
+        'jp_mynumber': re.compile(r'\b\d{4}-\d{4}-\d{4}\b'),  # 1234-5678-9012 (マイナンバー)
     }
 
     def filter(self, record):

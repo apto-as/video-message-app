@@ -178,6 +178,34 @@ class StorageManager:
                 pass
             logger.info("StorageManager background tasks stopped")
 
+    def _validate_user_id(self, user_id: str) -> None:
+        """
+        Validate user_id is safe for filesystem paths (Security: M-1)
+
+        Args:
+            user_id: User identifier to validate
+
+        Raises:
+            ValueError: If user_id contains invalid characters or path traversal attempts
+        """
+        import re
+
+        if not user_id:
+            raise ValueError("user_id cannot be empty")
+
+        # Only allow alphanumeric, dash, underscore
+        if not re.match(r'^[a-zA-Z0-9_-]+$', user_id):
+            raise ValueError(
+                f"Invalid user_id format: {user_id}. "
+                f"Only alphanumeric characters, dash, and underscore are allowed."
+            )
+
+        # Prevent directory traversal (redundant with regex, but explicit for security)
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            raise ValueError(f"Path traversal attempt detected in user_id: {user_id}")
+
+        logger.debug(f"User ID validation passed: {user_id}")
+
     def get_tier_path(self, tier: StorageTier, user_id: Optional[str] = None) -> Path:
         """
         Get directory path for storage tier (with optional user isolation)
@@ -188,8 +216,14 @@ class StorageManager:
 
         Returns:
             Path to tier directory
+
+        Raises:
+            ValueError: If user_id is invalid or contains path traversal attempts
         """
         if user_id:
+            # Validate user_id for security (prevent path traversal)
+            self._validate_user_id(user_id)
+
             # User-isolated path: storage_root/users/{user_id}/{tier}/
             user_path = self.storage_root / "users" / user_id / tier.value
             user_path.mkdir(parents=True, exist_ok=True)
@@ -306,7 +340,13 @@ class StorageManager:
 
         Returns:
             List of FileMetadata for user's files
+
+        Raises:
+            ValueError: If user_id is invalid or contains path traversal attempts
         """
+        # Validate user_id for security
+        self._validate_user_id(user_id)
+
         user_files = [
             meta for meta in self._metadata.values()
             if meta.user_id == user_id
@@ -327,7 +367,13 @@ class StorageManager:
 
         Returns:
             True if user owns the file, False otherwise
+
+        Raises:
+            ValueError: If user_id is invalid or contains path traversal attempts
         """
+        # Validate user_id for security
+        self._validate_user_id(user_id)
+
         file_key = str(file_path)
         if file_key not in self._metadata:
             # File not tracked, deny by default
