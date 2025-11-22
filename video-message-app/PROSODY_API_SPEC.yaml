@@ -1,0 +1,428 @@
+openapi: 3.0.3
+info:
+  title: Prosody Adjustment API
+  description: |
+    Fine-grained control over acoustic properties of synthesized speech.
+
+    The Prosody Adjustment API enables adjustment of pitch, tempo, and energy
+    to create more natural, expressive, and emotionally resonant voice messages.
+
+    ## Features
+    - **Pitch Control**: Adjust fundamental frequency (F0)
+    - **Tempo Control**: Modify speech rate
+    - **Energy Control**: Adjust loudness/intensity
+    - **Presets**: Predefined configurations for common use cases
+    - **Confidence Scoring**: Automatic quality assessment
+
+    ## Technology
+    - Processing Engine: Praat Parselmouth (PSOLA algorithm)
+    - Audio Format: WAV (16-bit PCM, 22.05 kHz)
+    - API Framework: FastAPI (Python 3.11)
+  version: 1.0.0
+  contact:
+    name: Video Message App Support
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:55433/api/prosody
+    description: Development server
+  - url: http://3.115.141.166:55433/api/prosody
+    description: Production server (EC2)
+
+tags:
+  - name: Health
+    description: Service health and status
+  - name: Adjustment
+    description: Prosody adjustment operations
+  - name: Presets
+    description: Predefined adjustment configurations
+  - name: Validation
+    description: Parameter validation
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if Prosody Adjustment service is available
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /adjust:
+    post:
+      tags:
+        - Adjustment
+      summary: Apply prosody adjustments
+      description: |
+        Apply acoustic adjustments to an audio file.
+
+        Supports two modes:
+        1. **Preset mode**: Use predefined configurations
+        2. **Custom mode**: Specify individual parameters
+      operationId: adjustAudio
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdjustmentRequest'
+            examples:
+              preset:
+                summary: Using preset
+                value:
+                  audio_file: (binary)
+                  text: "Happy Birthday!"
+                  preset: "celebration"
+              custom:
+                summary: Custom parameters
+                value:
+                  audio_file: (binary)
+                  text: "Happy Birthday!"
+                  pitch_shift: 1.15
+                  tempo_shift: 1.10
+                  energy_shift: 1.20
+      responses:
+        '200':
+          description: Adjustment successful
+          headers:
+            X-Confidence-Score:
+              description: Confidence score (0.0-1.0)
+              schema:
+                type: number
+                format: float
+            X-Pitch-Shift-Applied:
+              description: Applied pitch shift factor
+              schema:
+                type: number
+                format: float
+            X-Tempo-Shift-Applied:
+              description: Applied tempo shift factor
+              schema:
+                type: number
+                format: float
+            X-Energy-Shift-Applied:
+              description: Applied energy shift factor
+              schema:
+                type: number
+                format: float
+            X-Original-Duration:
+              description: Original audio duration (seconds)
+              schema:
+                type: number
+                format: float
+            X-Adjusted-Duration:
+              description: Adjusted audio duration (seconds)
+              schema:
+                type: number
+                format: float
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /presets:
+    get:
+      tags:
+        - Presets
+      summary: List available presets
+      description: Get predefined adjustment configurations for common use cases
+      operationId: listPresets
+      responses:
+        '200':
+          description: List of presets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresetsResponse'
+
+  /validate:
+    post:
+      tags:
+        - Validation
+      summary: Validate parameters
+      description: Check if adjustment parameters are within safe ranges
+      operationId: validateParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidationRequest'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          example: healthy
+        service:
+          type: string
+          example: Prosody Adjustment API
+        version:
+          type: string
+          example: 1.0.0
+        dependencies:
+          type: object
+          properties:
+            parselmouth:
+              type: object
+              properties:
+                available:
+                  type: boolean
+                version:
+                  type: string
+            numpy:
+              type: object
+              properties:
+                available:
+                  type: boolean
+                version:
+                  type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+          example:
+            - pitch_adjustment
+            - tempo_adjustment
+            - energy_adjustment
+            - confidence_scoring
+        uptime_seconds:
+          type: integer
+          example: 3600
+
+    AdjustmentRequest:
+      type: object
+      required:
+        - audio_file
+        - text
+      properties:
+        audio_file:
+          type: string
+          format: binary
+          description: Input audio file (WAV format)
+        text:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: Original text (for pause insertion)
+          example: "Happy Birthday!"
+        pitch_shift:
+          type: number
+          format: float
+          minimum: 0.90
+          maximum: 1.25
+          default: 1.15
+          description: Pitch multiplication factor (1.15 = +15%)
+        tempo_shift:
+          type: number
+          format: float
+          minimum: 0.95
+          maximum: 1.15
+          default: 1.10
+          description: Tempo multiplication factor (1.10 = +10% faster)
+        energy_shift:
+          type: number
+          format: float
+          minimum: 1.00
+          maximum: 1.30
+          default: 1.20
+          description: Energy multiplication factor (1.20 = +20% louder)
+        enable_pauses:
+          type: boolean
+          default: false
+          description: Insert strategic pauses (not yet implemented)
+        preset:
+          type: string
+          enum:
+            - celebration
+            - calm
+            - professional
+            - dramatic
+            - friendly
+          description: Use preset configuration (overrides individual parameters)
+          example: celebration
+
+    PresetsResponse:
+      type: object
+      properties:
+        presets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Preset'
+
+    Preset:
+      type: object
+      properties:
+        id:
+          type: string
+          example: celebration
+        name:
+          type: string
+          example: Celebration
+        description:
+          type: string
+          example: Joyful and energetic for birthdays, congratulations
+        parameters:
+          type: object
+          properties:
+            pitch_shift:
+              type: number
+              format: float
+            tempo_shift:
+              type: number
+              format: float
+            energy_shift:
+              type: number
+              format: float
+            enable_pauses:
+              type: boolean
+        use_cases:
+          type: array
+          items:
+            type: string
+          example:
+            - birthday
+            - congratulations
+            - celebration
+
+    ValidationRequest:
+      type: object
+      properties:
+        pitch_shift:
+          type: number
+          format: float
+        tempo_shift:
+          type: number
+          format: float
+        energy_shift:
+          type: number
+          format: float
+
+    ValidationResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          example: true
+        warnings:
+          type: array
+          items:
+            type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              parameter:
+                type: string
+              value:
+                type: number
+              error:
+                type: string
+        parameters:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              value:
+                type: number
+              valid:
+                type: boolean
+              range:
+                type: array
+                items:
+                  type: number
+                minItems: 2
+                maxItems: 2
+              warning:
+                type: string
+                nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error_code:
+          type: string
+          example: INVALID_PARAMETER
+        message:
+          type: string
+          example: "pitch_shift must be in [0.90, 1.25], got 1.50"
+        details:
+          type: object
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-11-07T10:30:00Z"
+
+  examples:
+    CelebrationPreset:
+      summary: Celebration preset
+      description: Joyful and energetic tone for birthdays and congratulations
+      value:
+        audio_file: (binary)
+        text: "Happy Birthday!"
+        preset: "celebration"
+
+    CustomAdjustment:
+      summary: Custom parameters
+      description: Fine-tuned adjustments for specific needs
+      value:
+        audio_file: (binary)
+        text: "Welcome to our service"
+        pitch_shift: 1.08
+        tempo_shift: 1.00
+        energy_shift: 1.10
+
+    ProfessionalPreset:
+      summary: Professional preset
+      description: Clear and authoritative tone for business
+      value:
+        audio_file: (binary)
+        text: "We are pleased to announce..."
+        preset: "professional"
+
+security: []

@@ -38,6 +38,10 @@ env/
 .env
 .env.local
 .env.docker
+video-message-app/.env
+
+# Security: Docker compose files with credentials
+docker-compose.letsencrypt.yml
 
 # Logs
 *.log

@@ -24,9 +24,16 @@ backend/*.log
 # Environment variables
 .env
 .env.local
+.env.docker
 .env.development.local
 .env.test.local
 .env.production.local
+
+# SECURITY: Never commit these sensitive files
+backend/.env
+backend/.env.docker
+openvoice_native/.env
+~/secure_credentials/
 
 # IDE/Editor files
 .vscode/
@@ -46,6 +53,20 @@ Thumbs.db
 
 # Docker
 .dockerignore
+docker-compose.override.yml  # Mac-specific, auto-generated
+*.override.yml
+
+# Docker volumes and data
+data/
+storage/
+volumes/
+
+# SSL certificates (use Let's Encrypt or AWS Certificate Manager)
+ssl/*.crt
+ssl/*.key
+ssl/*.pem
+ssl/letsencrypt/
+!ssl/.gitkeep
 
 # Temporary files
 *.tmp
@@ -91,6 +112,12 @@ d_id_uploads/
 .conda/
 miniconda3/
 
+# Python virtual environments (new structure)
+openvoice_native/venv_py311/
+openvoice_native/venv/
+.venv/
+*.venv/
+
 # UV package manager
 .uv/
 uv.lock
@@ -113,3 +140,34 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# AWS credentials and keys
+*.pem
+*.key
+*.crt
+.aws/
+~/.ssh/video-app-key.pem
+
+# Backup files
+*.bak
+*.backup
+*.old
+backup/
+backups/
+
+# User-uploaded content (large files)
+uploads/
+user_data/
+generated_videos/
+
+# Test outputs
+test_output/
+test_results/

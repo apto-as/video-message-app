@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  voicevox:
+    image: voicevox/voicevox_engine:cpu-ubuntu20.04-latest
+    container_name: voicevox_engine
+    ports:
+      - "50021:50021"
+    networks:
+      - voice_network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: voice_backend_dev
+    ports:
+      - "55433:55433"
+      - "5678:5678"  # debugpy port
+    volumes:
+      # Hot reload: mount source code
+      - ./backend:/app
+      # Exclude Python cache (performance)
+      - /app/__pycache__
+      - /app/.pytest_cache
+      # Persistent storage
+      - ./data/backend/storage:/app/storage
+    env_file:
+      - ./backend/.env
+    environment:
+      - ENVIRONMENT=development
+      - VOICEVOX_URL=http://voicevox:50021
+      - OPENVOICE_SERVICE_URL=http://host.docker.internal:8001
+      - D_ID_API_KEY=${D_ID_API_KEY}
+      - LOG_LEVEL=DEBUG
+      - PYTHONDONTWRITEBYTECODE=1  # Faster hot reload
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - voice_network
+    depends_on:
+      - voicevox
+    # No restart: allow debugger to attach
+    restart: "no"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: voice_frontend_dev
+    ports:
+      - "55434:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Exclude node_modules (performance)
+    environment:
+      - REACT_APP_API_URL=http://localhost:55433
+      - CHOKIDAR_USEPOLLING=true  # Fix hot reload on some systems
+    networks:
+      - voice_network
+    depends_on:
+      - backend
+    restart: "no"
+
+networks:
+  voice_network:
+    driver: bridge

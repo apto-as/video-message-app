@@ -1,0 +1,38 @@
+# Development stage with hot reload
+FROM python:3.11-slim as development
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsndfile1 \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies with caching
+COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Install development tools
+RUN pip install debugpy watchdog
+
+# Copy application (will be overridden by volume mount)
+COPY . .
+
+# Create storage directories
+RUN mkdir -p /app/storage/voices /app/storage/images
+
+# Expose ports
+EXPOSE 55433 5678
+
+# Environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV LOG_LEVEL=DEBUG
+
+# Hot reload with debugpy support
+CMD ["python", "-m", "debugpy", "--listen", "0.0.0.0:5678", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "55433", "--reload", "--reload-dir", "/app"]

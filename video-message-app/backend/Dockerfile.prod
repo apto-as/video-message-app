@@ -1,0 +1,55 @@
+# Builder stage (dependencies)
+FROM python:3.11-slim as builder
+
+WORKDIR /install
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies to /install prefix
+COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --prefix=/install --no-warn-script-location -r requirements.txt
+
+# Production stage (runtime only)
+FROM python:3.11-slim as production
+
+WORKDIR /app
+
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsndfile1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy application code
+COPY . .
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
+# Create storage directories
+RUN mkdir -p /app/storage/voices /app/storage/images
+
+# Expose port
+EXPOSE 55433
+
+# Environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV LOG_LEVEL=INFO
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:55433/health || exit 1
+
+# Production startup (no reload, optimized workers)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "55433", "--workers", "4", "--timeout-keep-alive", "300"]

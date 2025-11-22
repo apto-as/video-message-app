@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     openvoice_api_url: str = os.environ.get('OPENVOICE_API_URL', 'http://host.docker.internal:8001')
     debug_mode: str = os.environ.get('DEBUG_MODE', 'false')
     log_level: str = os.environ.get('LOG_LEVEL', 'INFO')
+    base_url: str = os.environ.get('BASE_URL', 'http://localhost:55433')
+    storage_dir: str = os.environ.get('STORAGE_DIR', '/app/storage')
     
     class Config:
         env_file = ".env"

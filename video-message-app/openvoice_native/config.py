@@ -16,11 +16,13 @@ class OpenVoiceNativeConfig(BaseModel):
     debug: bool = False  # Production環境ではreloadを無効化
     
     # ファイルパス設定
-    base_dir: Path = Path(__file__).parent.parent
+    # Docker環境: OPENVOICE_BASE_DIR=/app, STORAGE_PATH=/app/storage
+    # Native環境: Path(__file__).parent.parent
+    base_dir: Path = Path(os.getenv("OPENVOICE_BASE_DIR", Path(__file__).parent.parent))
     models_dir: Path = base_dir / "data" / "openvoice" / "checkpoints_v2"
     converter_dir: Path = models_dir / "converter"
     speakers_dir: Path = models_dir / "base_speakers" / "ses"
-    storage_dir: Path = base_dir / "data" / "backend" / "storage"
+    storage_dir: Path = Path(os.getenv("STORAGE_PATH", base_dir / "data" / "backend" / "storage"))
     voice_profiles_dir: Path = storage_dir / "voices" / "profiles"
     temp_dir: Path = base_dir / "openvoice_native" / "temp"
     

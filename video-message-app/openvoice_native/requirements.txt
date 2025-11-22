@@ -1,31 +1,83 @@
-# OpenVoice Native Service Requirements
-# MacOS ネイティブ環境用
+# OpenVoice Native Service Requirements - Python 3.11
+# Compatible with OpenVoice V2 and both CUDA/CPU environments
+# Tested and verified on EC2 (CUDA) and Mac (CPU/MPS)
 
-# FastAPI
+# Core numerical libraries
+# Note: NumPy 1.24.0+ required for Python 3.11
+# Gradio may upgrade to 1.26.4, which is acceptable
+numpy>=1.24.0,<2.0
+scipy==1.10.1
+
+# PyTorch (installed separately via pip install command in Dockerfile)
+# torch==2.0.1 (CUDA 11.8 or CPU version)
+# torchaudio==2.0.2
+
+# Audio processing libraries
+# Note: librosa 0.9.1 required by melotts
+librosa==0.9.1
+soundfile==0.12.1
+resampy==0.4.3
+audioread==3.0.1
+
+# OpenVoice V2 core dependencies
+unidecode==1.3.7
+eng_to_ipa==0.0.2
+inflect==7.0.0
+
+# Japanese text processing (MeCab)
+mecab-python3==1.0.9
+unidic-lite==1.0.8
+# UniDic dictionary will be downloaded via: python -m unidic download
+
+# Speech recognition and processing
+# Note: faster-whisper 1.2.1+ requires:
+#   - PyAV 11.0+ (Cython 3.x compatibility)
+#   - ctranslate2 >=4.0,<5 (dependency requirement)
+faster-whisper>=1.2.1
+whisper-timestamped==1.14.2
+ctranslate2>=4.0,<5
+tokenizers==0.13.3
+transformers==4.27.4
+
+# FastAPI and web server
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
+starlette==0.27.0
 
-# OpenVoice V2とその依存関係
-torch>=2.0.0,<2.4.0  # MPS対応版
-torchaudio>=2.0.0,<2.4.0
-librosa>=0.10.0,<0.11.0
-soundfile>=0.12.0
-unidecode>=1.3.0
-eng_to_ipa>=0.0.2
-inflect>=6.0.0
-scipy>=1.7.0,<1.12.0
-
-# NumPy互換バージョン（Python 3.12対応）
-numpy>=1.24.0
-
-# その他必須ライブラリ
-aiofiles==23.2.1
+# HTTP client
 httpx==0.25.2
+aiofiles==23.2.1
+
+# Data validation
 pydantic==2.5.0
+pydantic_core==2.14.1
+
+# Configuration and environment
 python-dotenv==1.0.0
+
+# Audio utilities
+pydub==0.25.1
+ffmpeg-python==0.2.0
 mutagen==1.47.0
 
-# 音声処理
-pydub>=0.25.0
-ffmpeg-python>=0.2.0
+# Gradio for web UI (optional, but required by OpenVoice)
+gradio==3.48.0
+gradio_client==0.6.1
+
+# Additional OpenVoice dependencies
+# Note: PyAV (av) is automatically installed as dependency of faster-whisper 1.2.1+
+# PyAV 16.0+ has proper Cython 3.x compatibility and ARM64 binary wheels
+onnxruntime==1.19.2
+
+# MeloTTS will be installed separately from GitHub:
+# pip install git+https://github.com/myshell-ai/MeloTTS.git
+
+# Wavmark (OpenVoice V2 watermark functionality)
+wavmark==0.0.3
+
+# Note on package versions:
+# - NumPy: May be upgraded to 1.26.4 by gradio (acceptable)
+# - librosa: Fixed at 0.9.1 due to melotts requirement
+# - transformers: Fixed at 4.27.4 due to faster-whisper compatibility
+# - networkx: May be downgraded to 2.8.8 by melotts (acceptable)

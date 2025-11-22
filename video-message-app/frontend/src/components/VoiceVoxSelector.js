@@ -72,7 +72,7 @@ const VoiceVoxSelector = ({ onVoiceSelect, selectedVoice, showCloneOption = true
       let requestBody;
       
       if (activeTab === 'voicevox') {
-        endpoint = '/api/voicevox/synthesis';
+        endpoint = API_CONFIG.ENDPOINTS.VOICEVOX_SYNTHESIS;
         requestBody = {
           text: testText,
           speaker_id: voice.style_id,
@@ -80,7 +80,7 @@ const VoiceVoxSelector = ({ onVoiceSelect, selectedVoice, showCloneOption = true
           preset: 'normal'
         };
       } else {
-        endpoint = '/api/unified-voice/synthesize';
+        endpoint = API_CONFIG.ENDPOINTS.UNIFIED_VOICE_SYNTHESIZE;
         requestBody = {
           text: testText,
           voice_profile: {
@@ -95,7 +95,7 @@ const VoiceVoxSelector = ({ onVoiceSelect, selectedVoice, showCloneOption = true
         };
       }
       
-      const response = await fetch(`${getApiEndpoint()}${endpoint}`, {
+      const response = await fetch(getApiEndpoint(endpoint), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
