@@ -26,13 +26,21 @@ log_info(
     version="1.0.0"
 )
 
-# CORS設定
+# CORS設定（セキュリティ強化）
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "Accept-Language",
+        "Content-Language",
+        "X-Requested-With"
+    ],
+    max_age=600,  # プリフライトキャッシュ10分
 )
 
 # ルーター登録
