@@ -5,8 +5,16 @@ from slowapi.errors import RateLimitExceeded
 import uvicorn
 import time
 import os
-from routers import voice, voicevox, unified_voice, voice_clone, background, d_id, person_detection, websocket, sse, video_generation
+from routers import voice, voicevox, unified_voice, voice_clone, background, d_id, websocket, sse, video_generation
 from core.config import settings
+
+# Optional: Person Detection (Phase 2 feature - requires YOLO dependencies)
+try:
+    from routers import person_detection
+    PERSON_DETECTION_AVAILABLE = True
+except ImportError:
+    PERSON_DETECTION_AVAILABLE = False
+    logger = None  # Will be set after logging is initialized
 from core.logging import setup_logging, get_logger, log_api_request, log_error, log_info
 from services.progress_tracker import progress_tracker
 from middleware.rate_limiter import limiter, rate_limit_exceeded_handler, check_redis_health
@@ -56,7 +64,14 @@ app.include_router(unified_voice.router, prefix="/api", tags=["unified_voice"])
 app.include_router(voice_clone.router, prefix="/api", tags=["voice_clone"])
 app.include_router(background.router, prefix="/api", tags=["background"])
 app.include_router(d_id.router, prefix="/api/d-id", tags=["d-id"])
-app.include_router(person_detection.router)  # /api/person-detection prefix included in router
+
+# Optional: Person Detection (Phase 2 - 2025年12月)
+if PERSON_DETECTION_AVAILABLE:
+    app.include_router(person_detection.router)  # /api/person-detection prefix included in router
+    log_info("Person detection router enabled (YOLO dependencies available)")
+else:
+    logger.warning("Person detection router disabled (YOLO dependencies not installed)")
+
 app.include_router(websocket.router, prefix="/api", tags=["websocket"])
 app.include_router(sse.router, prefix="/api", tags=["sse"])
 app.include_router(video_generation.router, tags=["video-generation"])
