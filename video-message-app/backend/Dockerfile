@@ -22,8 +22,14 @@ WORKDIR /app
 
 # Pythonの依存関係をインストール（Mac環境対応、キャッシュ最適化）
 COPY requirements.txt .
+
+# PyTorch with CUDA support for YOLOv8 Person Detection
+# EC2 (g4dn.xlarge) uses NVIDIA Tesla T4 GPU with CUDA 11.8
+RUN pip install --upgrade pip && \
+    pip install torch==2.0.1+cu118 torchvision==0.15.1+cu118 \
+    --index-url https://download.pytorch.org/whl/cu118
+
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip && \
     pip install -r requirements.txt
 
 # アプリケーションコードをコピー
