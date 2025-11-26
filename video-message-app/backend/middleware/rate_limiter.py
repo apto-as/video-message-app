@@ -128,24 +128,36 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) 
     )
 
 # ============================================================================
-# Redis Health Check
+# Storage Health Check
 # ============================================================================
 
-async def check_redis_health() -> bool:
+async def check_storage_health() -> bool:
     """
-    Check if Redis is available
+    Check if rate limiter storage is available
 
     Returns:
-        True if Redis is healthy, False otherwise
+        True if storage is healthy, False otherwise
     """
+    current_storage = get_storage_uri()
+
+    # Memory storage is always healthy
+    if current_storage == "memory://":
+        return True
+
+    # Check Redis if configured
     try:
-        redis_client = redis.from_url(get_redis_url(), decode_responses=True)
+        import redis.asyncio as redis_async
+        redis_client = redis_async.from_url(current_storage, decode_responses=True)
         await redis_client.ping()
         await redis_client.close()
         return True
     except Exception as e:
         logger.error(f"Redis health check failed: {e}")
         return False
+
+
+# Legacy alias for backward compatibility
+check_redis_health = check_storage_health
 
 # ============================================================================
 # Rate Limit Decorators (Convenience)
