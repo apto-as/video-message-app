@@ -25,8 +25,11 @@ COPY requirements.txt .
 
 # PyTorch with CUDA support for YOLOv8 Person Detection
 # EC2 (g4dn.xlarge) uses NVIDIA Tesla T4 GPU with CUDA 11.8
+# Note: Large download (~2.3GB), using retry and timeout settings
 RUN pip install --upgrade pip && \
-    pip install torch==2.0.1+cu118 torchvision==0.15.1+cu118 \
+    pip config set global.timeout 300 && \
+    pip config set global.retries 5 && \
+    pip install --no-cache-dir torch==2.0.1+cu118 torchvision==0.15.1+cu118 \
     --index-url https://download.pytorch.org/whl/cu118
 
 RUN --mount=type=cache,target=/root/.cache/pip \
