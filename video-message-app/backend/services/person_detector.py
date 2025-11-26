@@ -5,8 +5,27 @@ from typing import List, Dict, Optional
 import torch
 from pathlib import Path
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+
+def _check_cuda_actually_works() -> bool:
+    """
+    Check if CUDA is actually usable (not just detected).
+    Docker containers may detect CUDA but lack runtime libraries.
+    """
+    if not torch.cuda.is_available():
+        return False
+
+    try:
+        # Try to create a small tensor on CUDA to verify it works
+        test_tensor = torch.zeros(1, device="cuda")
+        del test_tensor
+        return True
+    except Exception as e:
+        logger.warning(f"CUDA detected but not usable: {e}")
+        return False
 
 
 class PersonDetector:
@@ -20,14 +39,20 @@ class PersonDetector:
             model_path: Path to YOLOv8 model weights
             device: Device to run model on ('cuda', 'cpu', or None for auto-detect)
         """
+        # Check environment variable for forced CPU mode
+        force_cpu = os.environ.get("PERSON_DETECTION_FORCE_CPU", "").lower() in ("true", "1", "yes")
+
         # Auto-detect best available device
         if device is None:
-            if torch.cuda.is_available():
+            if force_cpu:
+                device = "cpu"
+                logger.info("Forced CPU mode via environment variable")
+            elif _check_cuda_actually_works():
                 device = "cuda"
-                logger.info(f"CUDA available: using {torch.cuda.get_device_name(0)}")
+                logger.info(f"CUDA working: using {torch.cuda.get_device_name(0)}")
             else:
                 device = "cpu"
-                logger.info("CUDA not available: using CPU")
+                logger.info("CUDA not available or not working: using CPU")
 
         self.device = device
 

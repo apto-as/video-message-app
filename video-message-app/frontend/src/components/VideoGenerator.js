@@ -5,6 +5,7 @@ import VideoPreview from './VideoPreview';
 import ErrorMessage from './ErrorMessage';
 import LoadingSpinner from './LoadingSpinner';
 import BackgroundProcessor from './BackgroundProcessor';
+import PersonDetector from './PersonDetector';
 import VoiceVoxSelector from './VoiceVoxSelector';
 import DIdSelector from './DIdSelector';
 import DIdErrorBoundary from './DIdErrorBoundary';
@@ -12,6 +13,7 @@ import { generateVideoWithVoicevox, generateVideoWithOpenVoice } from '../servic
 
 const VideoGenerator = () => {
   const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [text, setText] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -115,6 +117,7 @@ const VideoGenerator = () => {
 
   const handleReset = () => {
     setImage(null);
+    setImagePreview(null);
     setText('');
     setVideoUrl('');
     setError('');
@@ -132,6 +135,15 @@ const VideoGenerator = () => {
       remove_background: false,
       enhance_quality: true
     });
+  };
+
+  // PersonDetectorからの処理済み画像を受け取る
+  const handlePersonDetectorProcessed = (processedImage, info) => {
+    setProcessedImageData(processedImage);
+    setProcessingInfo(prev => ({
+      ...prev,
+      ...info
+    }));
   };
 
   const canGenerate = () => {
@@ -156,10 +168,24 @@ const VideoGenerator = () => {
         <VideoPreview videoUrl={videoUrl} onReset={handleReset} />
       ) : (
         <div className="input-section">
-          <ImageUpload onImageSelect={setImage} selectedImage={image} />
-          
+          <ImageUpload
+            onImageSelect={setImage}
+            selectedImage={image}
+            onPreviewChange={setImagePreview}
+          />
+
+          {/* Person Detector - 画像アップロード後に表示 */}
+          {image && imagePreview && (
+            <PersonDetector
+              image={image}
+              imagePreview={imagePreview}
+              onProcessedImage={handlePersonDetectorProcessed}
+              disabled={loading}
+            />
+          )}
+
           {image && (
-            <BackgroundProcessor 
+            <BackgroundProcessor
               image={image}
               onImageProcessed={handleImageProcessed}
               disabled={loading}

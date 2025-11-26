@@ -1,20 +1,26 @@
 import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 
-const ImageUpload = ({ onImageSelect, selectedImage }) => {
+const ImageUpload = ({ onImageSelect, selectedImage, onPreviewChange }) => {
   const [preview, setPreview] = useState(null);
 
   const onDrop = useCallback((acceptedFiles) => {
     const file = acceptedFiles[0];
     if (file) {
       onImageSelect(file);
-      
+
       // プレビュー作成
       const reader = new FileReader();
-      reader.onload = () => setPreview(reader.result);
+      reader.onload = () => {
+        setPreview(reader.result);
+        // 親コンポーネントにプレビューURLを通知
+        if (onPreviewChange) {
+          onPreviewChange(reader.result);
+        }
+      };
       reader.readAsDataURL(file);
     }
-  }, [onImageSelect]);
+  }, [onImageSelect, onPreviewChange]);
 
   const { getRootProps, getInputProps, isDragActive, fileRejections } = useDropzone({
     onDrop,
