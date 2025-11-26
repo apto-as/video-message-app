@@ -1,6 +1,6 @@
 # NVIDIA CUDA base image with cuDNN for YOLOv8 GPU acceleration
-# Using devel image to include nvrtc (NVIDIA Runtime Compiler) required by cuDNN
-FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+# Using runtime image (smaller) with manually installed nvrtc
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -8,6 +8,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Set CUDA library paths for cuDNN and nvrtc
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/targets/x86_64-linux/lib:${LD_LIBRARY_PATH}
 ENV PATH=/usr/local/cuda/bin:${PATH}
+
+# Install NVRTC (NVIDIA Runtime Compiler) library required by cuDNN
+# This is the missing component in the runtime image
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cuda-nvrtc-11-8 \
+    && rm -rf /var/lib/apt/lists/* \
+    && ldconfig
 
 # Install Python 3.11 and system dependencies
 RUN apt-get update && apt-get install -y \
