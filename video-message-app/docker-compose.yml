@@ -43,6 +43,7 @@ services:
   backend:
     build: ./backend
     container_name: voice_backend
+    runtime: nvidia  # NVIDIA Container Runtime for GPU access (YOLO person detection)
     expose:
       - "55433"
     volumes:
@@ -51,6 +52,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      - NVIDIA_VISIBLE_DEVICES=all
       - ENVIRONMENT=docker
       - VOICEVOX_URL=http://voicevox:50021
       - OPENVOICE_SERVICE_URL=http://openvoice:8001  # Use container name instead of host.docker.internal
