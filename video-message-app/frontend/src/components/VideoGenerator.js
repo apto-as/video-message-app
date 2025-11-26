@@ -331,26 +331,6 @@ const VideoGenerator = () => {
                     <option value="excited">興奮</option>
                   </select>
                 </div>
-                <div className="param-checkboxes">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={audioParams.enhance_quality}
-                      onChange={(e) => setAudioParams({...audioParams, enhance_quality: e.target.checked})}
-                      disabled={loading}
-                    />
-                    画質向上
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={audioParams.remove_background}
-                      onChange={(e) => setAudioParams({...audioParams, remove_background: e.target.checked})}
-                      disabled={loading}
-                    />
-                    背景削除
-                  </label>
-                </div>
               </div>
             </div>
           )}

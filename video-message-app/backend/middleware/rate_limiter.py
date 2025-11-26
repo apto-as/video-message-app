@@ -4,7 +4,7 @@ Rate Limiting Middleware for FastAPI
 Security Features:
 - Per-user rate limiting (10 req/min for synthesis endpoints)
 - Global rate limiting (100 req/min across all users)
-- Redis-based distributed rate limiting
+- Memory-based rate limiting (Redis optional)
 - Token bucket algorithm via slowapi
 
 Usage:
@@ -26,21 +26,31 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 import logging
 import os
-import redis.asyncio as redis
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 # ============================================================================
-# Redis Configuration
+# Storage Configuration
 # ============================================================================
 
-def get_redis_url() -> str:
-    """Get Redis URL from environment (default: localhost)"""
-    redis_host = os.getenv("REDIS_HOST", "localhost")
-    redis_port = os.getenv("REDIS_PORT", "6379")
-    redis_db = os.getenv("REDIS_DB", "0")
-    return f"redis://{redis_host}:{redis_port}/{redis_db}"
+def get_storage_uri() -> Optional[str]:
+    """
+    Get storage URI from environment
+
+    Returns:
+        Redis URL if REDIS_HOST is set, None for in-memory storage
+    """
+    redis_host = os.getenv("REDIS_HOST")
+
+    # If REDIS_HOST is explicitly set, use Redis
+    if redis_host:
+        redis_port = os.getenv("REDIS_PORT", "6379")
+        redis_db = os.getenv("REDIS_DB", "0")
+        return f"redis://{redis_host}:{redis_port}/{redis_db}"
+
+    # Otherwise, use in-memory storage (default for development/small deployments)
+    return "memory://"
 
 # ============================================================================
 # Key Function for Rate Limiting
@@ -78,15 +88,16 @@ def get_rate_limit_key(request: Request) -> str:
 # Limiter Instance
 # ============================================================================
 
+storage_uri = get_storage_uri()
 limiter = Limiter(
     key_func=get_rate_limit_key,
     default_limits=["100/minute"],  # Global limit: 100 req/min
-    storage_uri=get_redis_url(),
+    storage_uri=storage_uri,
     strategy="moving-window",  # More accurate than fixed-window
     headers_enabled=True  # Add X-RateLimit-* headers to responses
 )
 
-logger.info(f"Rate limiter initialized with Redis: {get_redis_url()}")
+logger.info(f"Rate limiter initialized with storage: {storage_uri}")
 
 # ============================================================================
 # Custom Rate Limit Exceeded Handler
