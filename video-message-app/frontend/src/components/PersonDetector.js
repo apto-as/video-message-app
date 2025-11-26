@@ -106,11 +106,15 @@ const PersonDetector = ({
       );
 
       // Pass the processed image to parent
+      // Note: rembg is used in backend to remove background during extraction
       if (onProcessedImage && result.processed_image) {
         onProcessedImage(result.processed_image, {
           person_detection: true,
           extracted_count: selectedPersonIds.size,
-          total_detected: detectedPersons.length
+          total_detected: detectedPersons.length,
+          background_removed: true,      // rembg removes background in extraction
+          background_composited: false,  // no compositing in person extraction
+          quality_enhanced: false        // no quality enhancement in extraction
         });
       }
     } catch (err) {
