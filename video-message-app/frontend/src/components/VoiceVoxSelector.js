@@ -127,11 +127,12 @@ const VoiceVoxSelector = ({ onVoiceSelect, selectedVoice, showCloneOption = true
   const renderVoiceCard = (voice, index) => {
     // 各音声に固有のIDを設定
     const voiceUniqueId = voice.style_id || voice.id || voice.speaker_uuid || `voice-${index}`;
-    
-    // 選択状態の判定を正確に行う
-    const isSelected = selectedVoice && (
+
+    // 選択状態の判定を正確に行う（providerも考慮）
+    const isSelected = selectedVoice && selectedVoice.provider === activeTab && (
       selectedVoice.speakerId === voice.style_id ||
       selectedVoice.id === voiceUniqueId ||
+      selectedVoice.id === voice.id ||
       (selectedVoice.metadata && selectedVoice.metadata.style_id === voice.style_id)
     );
     
