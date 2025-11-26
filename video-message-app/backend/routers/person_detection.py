@@ -162,7 +162,9 @@ async def extract_selected_person(
     image: UploadFile = File(...),
     selected_person_ids: str = Form(..., description="JSON array of person IDs to keep, e.g., [0, 2]"),
     conf_threshold: float = Form(0.5, ge=0.0, le=1.0),
-    padding: int = Form(20, ge=0, le=100, description="Padding around person bbox in pixels")
+    padding: int = Form(20, ge=0, le=100, description="Padding around person bbox in pixels"),
+    add_transparent_padding: bool = Form(True, description="Add 300px transparent padding around extracted person"),
+    transparent_padding_size: int = Form(300, ge=0, le=500, description="Size of transparent padding in pixels")
 ):
     """
     Extract only selected persons from image, removing background and other people.
@@ -172,9 +174,11 @@ async def extract_selected_person(
         selected_person_ids: JSON array of person IDs to keep (from detect endpoint)
         conf_threshold: Confidence threshold for detection
         padding: Extra padding around person bounding box
+        add_transparent_padding: If True, add transparent padding around extracted person (default True)
+        transparent_padding_size: Size of transparent padding in pixels (default 300)
 
     Returns:
-        PNG image with only selected persons (transparent background)
+        PNG image with only selected persons (transparent background), optionally with extra padding
     """
     # Validate file type
     if not image.content_type or not image.content_type.startswith("image/"):
@@ -280,6 +284,29 @@ async def extract_selected_person(
             # Apply combined mask as alpha
             result[:, :, 3] = combined_mask
 
+            # Crop to the content bounding box (non-transparent area)
+            non_zero = cv2.findNonZero(combined_mask)
+            if non_zero is not None:
+                content_x, content_y, content_w, content_h = cv2.boundingRect(non_zero)
+                result = result[content_y:content_y+content_h, content_x:content_x+content_w]
+                final_h, final_w = result.shape[:2]
+            else:
+                final_h, final_w = result.shape[:2]
+
+            # Add transparent padding if requested
+            if add_transparent_padding and transparent_padding_size > 0:
+                pad = transparent_padding_size
+                padded_h = final_h + 2 * pad
+                padded_w = final_w + 2 * pad
+
+                # Create transparent canvas
+                padded_result = np.zeros((padded_h, padded_w, 4), dtype=np.uint8)
+
+                # Place the extracted person in the center
+                padded_result[pad:pad+final_h, pad:pad+final_w] = result
+                result = padded_result
+                final_h, final_w = padded_h, padded_w
+
             # Encode as PNG
             _, png_bytes = cv2.imencode('.png', result)
             png_base64 = base64.b64encode(png_bytes.tobytes()).decode('utf-8')
@@ -290,7 +317,9 @@ async def extract_selected_person(
                 "extracted_persons": [p["person_id"] for p in selected_persons],
                 "total_persons_detected": len(all_persons),
                 "processed_image": f"data:image/png;base64,{png_base64}",
-                "image_dimensions": {"width": w, "height": h}
+                "image_dimensions": {"width": final_w, "height": final_h},
+                "padding_added": add_transparent_padding,
+                "padding_size": transparent_padding_size if add_transparent_padding else 0
             }
 
         except ImportError:
@@ -313,6 +342,29 @@ async def extract_selected_person(
 
             result[:, :, 3] = combined_mask
 
+            # Crop to the content bounding box (non-transparent area)
+            non_zero = cv2.findNonZero(combined_mask)
+            if non_zero is not None:
+                content_x, content_y, content_w, content_h = cv2.boundingRect(non_zero)
+                result = result[content_y:content_y+content_h, content_x:content_x+content_w]
+                final_h, final_w = result.shape[:2]
+            else:
+                final_h, final_w = result.shape[:2]
+
+            # Add transparent padding if requested
+            if add_transparent_padding and transparent_padding_size > 0:
+                pad = transparent_padding_size
+                padded_h = final_h + 2 * pad
+                padded_w = final_w + 2 * pad
+
+                # Create transparent canvas
+                padded_result = np.zeros((padded_h, padded_w, 4), dtype=np.uint8)
+
+                # Place the extracted person in the center
+                padded_result[pad:pad+final_h, pad:pad+final_w] = result
+                result = padded_result
+                final_h, final_w = padded_h, padded_w
+
             _, png_bytes = cv2.imencode('.png', result)
             png_base64 = base64.b64encode(png_bytes.tobytes()).decode('utf-8')
 
@@ -322,7 +374,9 @@ async def extract_selected_person(
                 "extracted_persons": [p["person_id"] for p in selected_persons],
                 "total_persons_detected": len(all_persons),
                 "processed_image": f"data:image/png;base64,{png_base64}",
-                "image_dimensions": {"width": w, "height": h},
+                "image_dimensions": {"width": final_w, "height": final_h},
+                "padding_added": add_transparent_padding,
+                "padding_size": transparent_padding_size if add_transparent_padding else 0,
                 "note": "Background removal not available, using bbox extraction only"
             }
 
