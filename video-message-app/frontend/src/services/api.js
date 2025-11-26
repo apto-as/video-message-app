@@ -327,3 +327,104 @@ export const generateVideoWithDId = async (audioUrl, imageFile = null, options =
 // D-IDプレゼンター機能は削除されました
 // リップシンク動画生成のみサポート
 
+// ===== Person Detection API =====
+
+/**
+ * 画像から人物を検出
+ * @param {File} imageFile - 画像ファイル
+ * @param {number} confThreshold - 信頼度閾値 (0.0-1.0)
+ * @returns {Promise<Object>} - 検出結果
+ */
+export const detectPersons = async (imageFile, confThreshold = 0.5) => {
+  const formData = new FormData();
+  formData.append('image', imageFile);
+
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/person-detection/detect?conf_threshold=${confThreshold}`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 60000,
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw new Error(error.response.data.detail || 'サーバーエラー');
+    } else if (error.request) {
+      throw new Error('ネットワークエラー');
+    } else {
+      throw new Error('人物検出に失敗しました');
+    }
+  }
+};
+
+/**
+ * 選択した人物のみを抽出（背景と他の人物を削除）
+ * @param {File} imageFile - 画像ファイル
+ * @param {number[]} selectedPersonIds - 残す人物のID配列
+ * @param {number} confThreshold - 信頼度閾値
+ * @param {number} padding - パディング（ピクセル）
+ * @returns {Promise<Object>} - 抽出結果（Base64画像含む）
+ */
+export const extractSelectedPersons = async (
+  imageFile,
+  selectedPersonIds,
+  confThreshold = 0.5,
+  padding = 20
+) => {
+  const formData = new FormData();
+  formData.append('image', imageFile);
+  formData.append('selected_person_ids', JSON.stringify(selectedPersonIds));
+  formData.append('conf_threshold', confThreshold);
+  formData.append('padding', padding);
+
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/person-detection/extract-person`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 120000, // 2分タイムアウト（背景削除は時間がかかる）
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw new Error(error.response.data.detail || 'サーバーエラー');
+    } else if (error.request) {
+      throw new Error('ネットワークエラー');
+    } else {
+      throw new Error('人物抽出に失敗しました');
+    }
+  }
+};
+
+/**
+ * Person Detection APIのヘルスチェック
+ * @returns {Promise<Object>} - ヘルス状態
+ */
+export const getPersonDetectionHealth = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/person-detection/health`, {
+      timeout: 10000,
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw new Error(error.response.data.detail || 'サーバーエラー');
+    } else if (error.request) {
+      throw new Error('ネットワークエラー');
+    } else {
+      throw new Error('ヘルスチェックに失敗しました');
+    }
+  }
+};
+

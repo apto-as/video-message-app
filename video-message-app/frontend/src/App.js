@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import VideoGenerator from './components/VideoGenerator';
 import VoiceCloneUpload from './components/VoiceCloneUpload';
+import PersonDetection from './components/PersonDetection';
 import './App.css';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState('video'); // 'video', 'voice-clone'
+  const [currentPage, setCurrentPage] = useState('video'); // 'video', 'voice-clone', 'person-detection'
   const [voiceListRefreshKey, setVoiceListRefreshKey] = useState(0);
 
   return (
@@ -27,6 +28,12 @@ function App() {
             >
               🎙️ 音声クローン
             </button>
+            <button
+              className={`nav-button ${currentPage === 'person-detection' ? 'active' : ''}`}
+              onClick={() => setCurrentPage('person-detection')}
+            >
+              👤 人物検出
+            </button>
           </div>
         </div>
       </nav>
@@ -34,7 +41,7 @@ function App() {
       <main className="app-main">
         {currentPage === 'video' && <VideoGenerator key={voiceListRefreshKey} />}
         {currentPage === 'voice-clone' && (
-          <VoiceCloneUpload 
+          <VoiceCloneUpload
             onUploadComplete={(profileId) => {
               console.log('音声クローン登録完了:', profileId);
               // 音声リストを更新
@@ -46,6 +53,7 @@ function App() {
             }}
           />
         )}
+        {currentPage === 'person-detection' && <PersonDetection />}
       </main>
 
       <style>{`
