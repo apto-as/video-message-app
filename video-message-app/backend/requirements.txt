@@ -44,6 +44,6 @@ scipy>=1.7.0; sys_platform == "darwin"
 
 # YOLOv8 Person Detection (Phase 2)
 # Note: torch and torchvision are installed in Dockerfile with CUDA support
-# torch==2.0.1+cu118 (installed via Dockerfile)
+# torch==2.0.0+cu118 (installed via Dockerfile)
 # torchvision==0.15.1+cu118 (installed via Dockerfile)
 ultralytics==8.0.196
