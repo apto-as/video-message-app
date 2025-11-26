@@ -22,12 +22,14 @@ class OpenVoiceNativeClient:
     def __init__(self, base_url: str = None):
         """Initialize with proper URL detection"""
         if base_url is None:
-            # Try OPENVOICE_API_URL first (matches environment variable)
-            base_url = os.environ.get('OPENVOICE_API_URL')
+            # Try multiple environment variable names for flexibility
+            base_url = os.environ.get('OPENVOICE_SERVICE_URL')  # docker-compose.yml setting
             if not base_url:
-                # Check if running in Docker
+                base_url = os.environ.get('OPENVOICE_API_URL')  # alternative name
+            if not base_url:
+                # Check if running in Docker - use container name for network access
                 if os.environ.get('ENVIRONMENT') == 'docker':
-                    base_url = 'http://host.docker.internal:8001'
+                    base_url = 'http://openvoice:8001'  # Use Docker network container name
                 else:
                     base_url = 'http://localhost:8001'
         
