@@ -1,7 +1,18 @@
-FROM python:3.11-slim
+# NVIDIA CUDA base image with cuDNN for YOLOv8 GPU acceleration
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
-# Mac環境対応のシステム依存関係インストール
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Python 3.11 and system dependencies
 RUN apt-get update && apt-get install -y \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-venv \
+    python3.11-dev \
+    python3-pip \
     ffmpeg \
     libsndfile1 \
     libsndfile1-dev \
@@ -15,43 +26,44 @@ RUN apt-get update && apt-get install -y \
     liblapack-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 作業ディレクトリ設定
+# Set Python 3.11 as default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+
+# Upgrade pip
+RUN python -m pip install --upgrade pip
+
+# Set working directory
 WORKDIR /app
 
-# OpenVoiceはネイティブサービスに分離済み（PyTorch不要）
-
-# Pythonの依存関係をインストール（Mac環境対応、キャッシュ最適化）
+# Copy requirements first for better caching
 COPY requirements.txt .
 
 # PyTorch with CUDA support for YOLOv8 Person Detection
 # EC2 (g4dn.xlarge) uses NVIDIA Tesla T4 GPU with CUDA 11.8
 # Note: torchvision 0.15.1 requires torch 2.0.0 (not 2.0.1)
-RUN pip install --upgrade pip && \
-    pip config set global.timeout 300 && \
-    pip config set global.retries 5 && \
-    pip install --no-cache-dir torch==2.0.0+cu118 torchvision==0.15.1+cu118 \
+RUN pip install --no-cache-dir torch==2.0.0+cu118 torchvision==0.15.1+cu118 \
     --index-url https://download.pytorch.org/whl/cu118
 
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# アプリケーションコードをコピー
+# Copy application code
 COPY . .
 
-# ストレージディレクトリを作成（OpenVoice関連は除外）
+# Create storage directories
 RUN mkdir -p /app/storage/voices
 
-# 環境変数設定
+# Set environment variables
 ENV PYTHONPATH=/app
 ENV VOICEVOX_BASE_URL=http://voicevox:50021
 ENV OPENVOICE_API_URL=http://localhost:8001
 
-# ポート公開
+# Expose port
 EXPOSE 55433
 
-# ヘルスチェック（Mac環境対応、ログ負荷軽減）
+# Health check
 HEALTHCHECK --interval=120s --timeout=30s --start-period=180s --retries=2 \
   CMD curl -s -f http://localhost:55433/health > /dev/null || exit 1
 
-# アプリケーション起動（タイムアウト延長とワーカー最適化）
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "55433", "--reload", "--timeout-keep-alive", "300", "--timeout-graceful-shutdown", "30"]
+# Start application
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "55433", "--reload", "--timeout-keep-alive", "300", "--timeout-graceful-shutdown", "30"]
