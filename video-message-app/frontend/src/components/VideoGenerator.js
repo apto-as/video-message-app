@@ -186,7 +186,7 @@ const VideoGenerator = () => {
 
           {image && (
             <BackgroundProcessor
-              image={image}
+              image={processedImageData ? dataURLToFile(processedImageData, 'extracted-image.png') : image}
               onImageProcessed={handleImageProcessed}
               disabled={loading}
             />
