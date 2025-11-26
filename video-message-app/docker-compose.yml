@@ -58,7 +58,6 @@ services:
       - OPENVOICE_SERVICE_URL=http://openvoice:8001  # Use container name instead of host.docker.internal
       - D_ID_API_KEY=${D_ID_API_KEY:-your-d-id-api-key-here}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - PERSON_DETECTION_FORCE_CPU=true  # Force CPU mode for person detection (Docker lacks CUDA runtime)
     networks:
       - voice_network
     depends_on:
