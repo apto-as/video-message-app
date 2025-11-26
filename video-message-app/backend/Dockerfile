@@ -16,6 +16,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && ldconfig
 
+# Create libnvrtc.so symlink (required for cuDNN inference)
+# The versioned library exists but the unversioned symlink is missing
+RUN ln -sf /usr/local/cuda-11.8/targets/x86_64-linux/lib/libnvrtc.so.11.8.89 \
+           /usr/local/cuda-11.8/targets/x86_64-linux/lib/libnvrtc.so \
+    && ln -sf /usr/local/cuda-11.8/targets/x86_64-linux/lib/libnvrtc-builtins.so.11.8.89 \
+           /usr/local/cuda-11.8/targets/x86_64-linux/lib/libnvrtc-builtins.so \
+    && ldconfig
+
 # Install Python 3.11 and system dependencies
 RUN apt-get update && apt-get install -y \
     software-properties-common \
