@@ -259,7 +259,19 @@ async def extract_selected_person(
                 person_region = img[y1:y2, x1:x2]
 
                 # Remove background from this region using rembg
-                person_rgba = remove(person_region)
+                # Alpha matting有効化: 白い服が透過する問題を軽減
+                # - alpha_matting=True: エッジ処理を滑らかに
+                # - alpha_matting_foreground_threshold=270: 前景検出感度を上げる（白も前景として認識）
+                # - alpha_matting_background_threshold=10: 背景検出感度を下げる
+                # - post_process_mask=True: ノイズ除去
+                person_rgba = remove(
+                    person_region,
+                    alpha_matting=True,
+                    alpha_matting_foreground_threshold=270,
+                    alpha_matting_background_threshold=10,
+                    alpha_matting_erode_size=10,
+                    post_process_mask=True
+                )
 
                 # Extract alpha channel as mask
                 if person_rgba.shape[2] == 4:

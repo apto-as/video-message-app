@@ -633,9 +633,20 @@ class OpenVoiceNativeService:
         language: str = "ja",
         speed: float = 1.0,
         pitch: float = 0.0,
-        volume: float = 1.0
+        volume: float = 1.0,
+        pause_duration: float = 0.0
     ) -> VoiceSynthesisResponse:
-        """音声合成"""
+        """音声合成
+
+        Args:
+            text: 合成するテキスト
+            voice_profile_id: 音声プロファイルID
+            language: 言語コード (ja/en)
+            speed: 話速（0.5-2.0）
+            pitch: ピッチシフト（-0.15-0.15）
+            volume: 音量（0.0-2.0）
+            pause_duration: 文末に追加する無音の長さ（秒、0.0-3.0）
+        """
 
         if not self._initialized:
             return VoiceSynthesisResponse(
@@ -665,7 +676,7 @@ class OpenVoiceNativeService:
             
             # 音声合成実行
             audio_data = await self._synthesize_with_embedding(
-                text, embedding, language, speed, pitch, volume
+                text, embedding, language, speed, pitch, volume, pause_duration
             )
             
             if not audio_data:
@@ -736,9 +747,20 @@ class OpenVoiceNativeService:
         language: str,
         speed: float,
         pitch: float = 0.0,
-        volume: float = 1.0
+        volume: float = 1.0,
+        pause_duration: float = 0.0
     ) -> Optional[bytes]:
-        """埋め込みを使用した音声合成（OpenVoice V2公式方式 + 後処理）"""
+        """埋め込みを使用した音声合成（OpenVoice V2公式方式 + 後処理）
+
+        Args:
+            text: 合成するテキスト
+            embedding: 音声埋め込み
+            language: 言語コード
+            speed: 話速
+            pitch: ピッチシフト
+            volume: 音量
+            pause_duration: 文末に追加する無音の長さ（秒）
+        """
         try:
             import torch
             
@@ -813,10 +835,10 @@ class OpenVoiceNativeService:
 
                 logger.info(f"[DEBUG] Audio data loaded: {len(audio_data)} bytes")
 
-                # 後処理: pitch/volume調整
-                if pitch != 0.0 or volume != 1.0:
-                    logger.info(f"[DEBUG] Applying audio effects: pitch={pitch}, volume={volume}")
-                    audio_data = await self._apply_audio_effects(audio_data, pitch, volume)
+                # 後処理: pitch/volume調整 + 無音ポーズ追加
+                if pitch != 0.0 or volume != 1.0 or pause_duration > 0.0:
+                    logger.info(f"[DEBUG] Applying audio effects: pitch={pitch}, volume={volume}, pause_duration={pause_duration}")
+                    audio_data = await self._apply_audio_effects(audio_data, pitch, volume, pause_duration)
                     logger.info(f"[DEBUG] Audio effects applied: {len(audio_data)} bytes")
 
                 return audio_data
@@ -833,13 +855,20 @@ class OpenVoiceNativeService:
             logger.error(f"音声合成エラー: {str(e)}")
             return None
     
-    async def _apply_audio_effects(self, audio_data: bytes, pitch: float, volume: float) -> bytes:
-        """FFmpegを使用して音声後処理（pitch/volume調整）
+    async def _apply_audio_effects(
+        self,
+        audio_data: bytes,
+        pitch: float,
+        volume: float,
+        pause_duration: float = 0.0
+    ) -> bytes:
+        """FFmpegを使用して音声後処理（pitch/volume調整 + 無音追加）
 
         Args:
             audio_data: 元の音声データ（WAV形式）
             pitch: ピッチシフト（-0.15 to 0.15）
             volume: 音量（0.0-2.0）
+            pause_duration: 文末に追加する無音の長さ（秒、0.0-3.0）
 
         Returns:
             処理後の音声データ（WAV形式）
@@ -872,6 +901,10 @@ class OpenVoiceNativeService:
             # 音量調整
             if volume != 1.0:
                 filters.append(f"volume={volume}")
+
+            # 無音追加（文末にポーズを挿入）
+            if pause_duration > 0.0:
+                filters.append(f"apad=pad_dur={pause_duration}")
 
             # フィルターを結合
             filter_chain = ",".join(filters)

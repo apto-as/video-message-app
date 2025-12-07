@@ -102,26 +102,46 @@ class VOICEVOXClient:
             raise Exception(f"音声合成エラー: {str(e)}")
     
     async def text_to_speech(
-        self, 
-        text: str, 
+        self,
+        text: str,
         speaker_id: int = 1,  # デフォルト: 四国めたん（ノーマル）
         speed_scale: float = 1.0,
         pitch_scale: float = 0.0,
         intonation_scale: float = 1.0,
-        volume_scale: float = 1.0
+        volume_scale: float = 1.0,
+        pause_length: float = 0.0  # 追加ポーズ長（秒）
     ) -> bytes:
-        """テキストから音声を生成（ワンストップAPI）"""
-        
+        """テキストから音声を生成（ワンストップAPI）
+
+        Args:
+            text: 読み上げるテキスト
+            speaker_id: 話者ID
+            speed_scale: 速度（0.5-2.0）
+            pitch_scale: ピッチ（-0.15-0.15）
+            intonation_scale: 抑揚（0.0-2.0）
+            volume_scale: 音量（0.0-2.0）
+            pause_length: 文末などのポーズに追加する長さ（秒、0.0-3.0）
+        """
+
         # 1. 音声クエリ生成
         audio_query = await self.audio_query(text, speaker_id)
-        
+
         # 2. パラメータ調整
         audio_query['speedScale'] = speed_scale
         audio_query['pitchScale'] = pitch_scale
         audio_query['intonationScale'] = intonation_scale
         audio_query['volumeScale'] = volume_scale
-        
-        # 3. 音声合成
+
+        # 3. ポーズ長の調整（pause_moraのvowel_lengthを増加）
+        if pause_length > 0.0:
+            for accent_phrase in audio_query.get('accent_phrases', []):
+                pause_mora = accent_phrase.get('pause_mora')
+                if pause_mora:
+                    # 既存のポーズ長に追加
+                    original_length = pause_mora.get('vowel_length', 0.0)
+                    pause_mora['vowel_length'] = original_length + pause_length
+
+        # 4. 音声合成
         return await self.synthesis(audio_query, speaker_id)
     
     async def save_audio(

@@ -149,9 +149,20 @@ async def synthesize_voice(
     language: str = Form(default="ja", description="言語コード"),
     speed: float = Form(default=1.0, description="話速（0.5-2.0）"),
     pitch: float = Form(default=0.0, description="ピッチシフト（-0.15 to 0.15）"),
-    volume: float = Form(default=1.0, description="音量（0.0-2.0）")
+    volume: float = Form(default=1.0, description="音量（0.0-2.0）"),
+    pause_duration: float = Form(default=0.0, description="文末の無音ポーズ長（秒、0.0-3.0）")
 ):
-    """音声合成"""
+    """音声合成
+
+    Args:
+        text: 合成するテキスト
+        voice_profile_id: 音声プロファイルID
+        language: 言語コード（ja/en）
+        speed: 話速（0.5-2.0）
+        pitch: ピッチシフト（-0.15-0.15）
+        volume: 音量（0.0-2.0）
+        pause_duration: 文末に追加する無音の長さ（秒、0.0-3.0）
+    """
 
     # パラメータ検証
     if not text.strip():
@@ -177,6 +188,12 @@ async def synthesize_voice(
             status_code=400,
             detail="音量は0.0から2.0の範囲で指定してください"
         )
+
+    if not (0.0 <= pause_duration <= 3.0):
+        raise HTTPException(
+            status_code=400,
+            detail="無音ポーズ長は0.0から3.0の範囲で指定してください"
+        )
     
     try:
         # 音声合成実行
@@ -186,7 +203,8 @@ async def synthesize_voice(
             language=language,
             speed=speed,
             pitch=pitch,
-            volume=volume
+            volume=volume,
+            pause_duration=pause_duration
         )
         
         if not result.success:

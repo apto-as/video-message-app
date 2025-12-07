@@ -35,6 +35,7 @@ class VoiceSynthesisRequest(BaseModel):
     pitch_scale: float = Field(default=0.0, ge=-0.15, le=0.15, description="音高")
     intonation_scale: float = Field(default=1.0, ge=0.0, le=2.0, description="抑揚")
     volume_scale: float = Field(default=1.0, ge=0.0, le=2.0, description="音量")
+    pause_length: float = Field(default=0.0, ge=0.0, le=3.0, description="文末の無音ポーズ長（秒）")
     preset: Optional[str] = Field(default=None, description="音声プリセット")
 
 class BatchSynthesisRequest(BaseModel):
@@ -122,7 +123,11 @@ async def get_speaker_info(speaker_id: int):
 
 @router.post("/synthesis")
 async def synthesize_speech(request: VoiceSynthesisRequest):
-    """テキストから音声を合成"""
+    """テキストから音声を合成
+
+    Args:
+        request: VoiceSynthesisRequest with pause_length for adding silence at end
+    """
     try:
         async with await get_voicevox_client() as client:
             # プリセット適用
@@ -130,13 +135,14 @@ async def synthesize_speech(request: VoiceSynthesisRequest):
                 'speed_scale': request.speed_scale,
                 'pitch_scale': request.pitch_scale,
                 'intonation_scale': request.intonation_scale,
-                'volume_scale': request.volume_scale
+                'volume_scale': request.volume_scale,
+                'pause_length': request.pause_length
             }
-            
+
             if request.preset and request.preset in VOICE_PRESETS:
                 preset_params = VOICE_PRESETS[request.preset]
                 params.update(preset_params)
-            
+
             # 音声合成実行
             audio_data = await client.text_to_speech(
                 text=request.text,
