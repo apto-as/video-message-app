@@ -49,6 +49,7 @@ class VoiceSynthesisRequest(BaseModel):
     volume: float = Field(default=1.0, ge=0.0, le=2.0)
     intonation: float = Field(default=1.0, ge=0.0, le=2.0)
     emotion: str = "neutral"
+    pause_duration: float = Field(default=0.0, ge=0.0, le=3.0, description="文末の無音ポーズ長（秒）")
 
 class UnifiedVoiceService:
     """統合音声サービス"""
@@ -256,7 +257,8 @@ class UnifiedVoiceService:
             speed_scale=request.speed,
             pitch_scale=request.pitch,
             intonation_scale=request.intonation,
-            volume_scale=request.volume
+            volume_scale=request.volume,
+            pause_length=request.pause_duration
         )
     
     async def _synthesize_openvoice(self, request: VoiceSynthesisRequest) -> bytes:
@@ -292,7 +294,8 @@ class UnifiedVoiceService:
                     speed=request.speed,
                     pitch=request.pitch,
                     volume=request.volume,
-                    emotion=request.emotion
+                    emotion=request.emotion,
+                    pause_duration=request.pause_duration
                 )
             except Exception as e:
                 raise ValueError(f"OpenVoiceクローン音声での合成に失敗しました: {str(e)}")

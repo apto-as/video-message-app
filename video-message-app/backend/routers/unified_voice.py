@@ -46,6 +46,7 @@ class SynthesisRequestAPI(BaseModel):
     volume: float = Field(default=1.0, ge=0.0, le=2.0)
     intonation: float = Field(default=1.0, ge=0.0, le=2.0, description="抑揚（VOICEVOX専用）")
     emotion: str = Field(default="neutral")
+    pause_duration: float = Field(default=0.0, ge=0.0, le=3.0, description="文末の無音ポーズ長（秒）")
 
 # === エンドポイント ===
 
@@ -163,7 +164,8 @@ async def synthesize_speech(
             pitch=request_data.pitch,
             volume=request_data.volume,
             intonation=request_data.intonation,
-            emotion=request_data.emotion
+            emotion=request_data.emotion,
+            pause_duration=request_data.pause_duration
         )
         
         # 音声合成実行

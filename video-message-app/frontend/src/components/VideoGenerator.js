@@ -30,7 +30,8 @@ const VideoGenerator = () => {
     speed: 1.0,
     emotion: 'neutral',
     remove_background: false,
-    enhance_quality: true
+    enhance_quality: true,
+    pause_duration: 0.0
   });
 
   // Timeout detection for DIdSelector initialization
@@ -133,7 +134,8 @@ const VideoGenerator = () => {
       speed: 1.0,
       emotion: 'neutral',
       remove_background: false,
-      enhance_quality: true
+      enhance_quality: true,
+      pause_duration: 0.0
     });
   };
 
@@ -271,6 +273,18 @@ const VideoGenerator = () => {
                     disabled={loading}
                   />
                 </div>
+                <div className="param-control">
+                  <label>文末ポーズ: {audioParams.pause_duration.toFixed(1)}秒</label>
+                  <input
+                    type="range"
+                    min="0.0"
+                    max="3.0"
+                    step="0.1"
+                    value={audioParams.pause_duration}
+                    onChange={(e) => setAudioParams({...audioParams, pause_duration: parseFloat(e.target.value)})}
+                    disabled={loading}
+                  />
+                </div>
                 <div className="param-checkboxes">
                   <label>
                     <input
@@ -330,6 +344,18 @@ const VideoGenerator = () => {
                     <option value="angry">怒り</option>
                     <option value="excited">興奮</option>
                   </select>
+                </div>
+                <div className="param-control">
+                  <label>文末ポーズ: {audioParams.pause_duration.toFixed(1)}秒</label>
+                  <input
+                    type="range"
+                    min="0.0"
+                    max="3.0"
+                    step="0.1"
+                    value={audioParams.pause_duration}
+                    onChange={(e) => setAudioParams({...audioParams, pause_duration: parseFloat(e.target.value)})}
+                    disabled={loading}
+                  />
                 </div>
               </div>
             </div>

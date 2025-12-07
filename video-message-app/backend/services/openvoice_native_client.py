@@ -110,7 +110,8 @@ class OpenVoiceNativeClient:
         language: str = 'ja',
         speed: float = 1.0,
         pitch: float = 0.0,
-        volume: float = 1.0
+        volume: float = 1.0,
+        pause_duration: float = 0.0
     ) -> Optional[bytes]:
         """音声を合成"""
         try:
@@ -122,7 +123,8 @@ class OpenVoiceNativeClient:
                     'language': language,
                     'speed': speed,
                     'pitch': pitch,
-                    'volume': volume
+                    'volume': volume,
+                    'pause_duration': pause_duration
                 }
             )
             
@@ -154,10 +156,11 @@ class OpenVoiceNativeClient:
         language: str = 'ja',
         speed: float = 1.0,
         pitch: float = 0.0,
-        volume: float = 1.0
+        volume: float = 1.0,
+        pause_duration: float = 0.0
     ) -> Optional[bytes]:
         """クローン音声で合成（synthesize_voiceのエイリアス）"""
-        return await self.synthesize_voice(text, profile_id, language, speed, pitch, volume)
+        return await self.synthesize_voice(text, profile_id, language, speed, pitch, volume, pause_duration)
     
     async def list_profiles(self) -> List[Dict[str, Any]]:
         """プロファイル一覧を取得"""

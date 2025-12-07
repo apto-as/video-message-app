@@ -14,7 +14,8 @@ export const generateVideoWithVoicevox = async (imageFile, text, voiceData = nul
       speed_scale: audioParams.speed_scale || 1.0,
       pitch_scale: audioParams.pitch_scale || 0.0,
       intonation_scale: audioParams.intonation_scale || 1.0,
-      volume_scale: audioParams.volume_scale || 1.0
+      volume_scale: audioParams.volume_scale || 1.0,
+      pause_length: audioParams.pause_duration || 0.0
     };
 
     const voiceResponse = await axios.post(`${API_BASE_URL}/voicevox/synthesis`, voiceRequest, {
@@ -63,7 +64,8 @@ export const generateVideoWithOpenVoice = async (imageFile, text, voiceData = nu
       speed: audioParams.speed || 1.0,
       pitch: audioParams.pitch || 0.0,
       volume: audioParams.volume || 1.0,
-      emotion: audioParams.emotion || 'neutral'
+      emotion: audioParams.emotion || 'neutral',
+      pause_duration: audioParams.pause_duration || 0.0
     };
 
     // Debug output removed for production
