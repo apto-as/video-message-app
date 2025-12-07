@@ -369,19 +369,25 @@ export const detectPersons = async (imageFile, confThreshold = 0.5) => {
  * @param {number[]} selectedPersonIds - 残す人物のID配列
  * @param {number} confThreshold - 信頼度閾値
  * @param {number} padding - パディング（ピクセル）
+ * @param {boolean} addTransparentPadding - 透明パディングを追加するか（デフォルト: true）
+ * @param {number} transparentPaddingSize - 透明パディングのサイズ（ピクセル、デフォルト: 300）
  * @returns {Promise<Object>} - 抽出結果（Base64画像含む）
  */
 export const extractSelectedPersons = async (
   imageFile,
   selectedPersonIds,
   confThreshold = 0.5,
-  padding = 20
+  padding = 20,
+  addTransparentPadding = true,
+  transparentPaddingSize = 300
 ) => {
   const formData = new FormData();
   formData.append('image', imageFile);
   formData.append('selected_person_ids', JSON.stringify(selectedPersonIds));
   formData.append('conf_threshold', confThreshold);
   formData.append('padding', padding);
+  formData.append('add_transparent_padding', addTransparentPadding);
+  formData.append('transparent_padding_size', transparentPaddingSize);
 
   try {
     const response = await axios.post(

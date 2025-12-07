@@ -228,6 +228,43 @@
   cursor: pointer;
 }
 
+/* Padding Control */
+.padding-control {
+  margin: 20px 0;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.padding-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #333;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.padding-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.padding-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #666;
+  font-size: 14px;
+  margin-top: 12px;
+}
+
+.padding-slider input[type="range"] {
+  width: 100%;
+  cursor: pointer;
+}
+
 /* Action Buttons */
 .action-buttons {
   display: flex;

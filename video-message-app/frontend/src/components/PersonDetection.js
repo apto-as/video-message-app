@@ -22,6 +22,8 @@ const PersonDetection = () => {
   const [serviceStatus, setServiceStatus] = useState(null);
   const [confThreshold, setConfThreshold] = useState(0.5);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [transparentPaddingSize, setTransparentPaddingSize] = useState(300);
+  const [addTransparentPadding, setAddTransparentPadding] = useState(true);
 
   const fileInputRef = useRef(null);
   const imageRef = useRef(null);
@@ -154,7 +156,9 @@ const PersonDetection = () => {
         imageFile,
         Array.from(selectedPersonIds),
         confThreshold,
-        20 // padding
+        20, // padding
+        addTransparentPadding,
+        transparentPaddingSize
       );
 
       setExtractedImage(result.processed_image);
@@ -163,7 +167,7 @@ const PersonDetection = () => {
     } finally {
       setIsExtracting(false);
     }
-  }, [imageFile, selectedPersonIds, confThreshold]);
+  }, [imageFile, selectedPersonIds, confThreshold, addTransparentPadding, transparentPaddingSize]);
 
   // Download extracted image
   const handleDownload = useCallback(() => {
@@ -314,6 +318,31 @@ const PersonDetection = () => {
                 onChange={(e) => setConfThreshold(parseFloat(e.target.value))}
               />
             </label>
+          </div>
+
+          {/* Transparent Padding Settings */}
+          <div className="padding-control">
+            <label className="padding-checkbox">
+              <input
+                type="checkbox"
+                checked={addTransparentPadding}
+                onChange={(e) => setAddTransparentPadding(e.target.checked)}
+              />
+              透明パディングを追加
+            </label>
+            {addTransparentPadding && (
+              <label className="padding-slider">
+                パディングサイズ: {transparentPaddingSize}px
+                <input
+                  type="range"
+                  min="0"
+                  max="500"
+                  step="50"
+                  value={transparentPaddingSize}
+                  onChange={(e) => setTransparentPaddingSize(parseInt(e.target.value))}
+                />
+              </label>
+            )}
           </div>
 
           {/* Action Buttons */}
