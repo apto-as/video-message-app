@@ -47,6 +47,7 @@ class VoiceSynthesisRequest(BaseModel):
     speed: float = Field(default=1.0, ge=0.1, le=3.0)
     pitch: float = Field(default=0.0, ge=-0.15, le=0.15)
     volume: float = Field(default=1.0, ge=0.0, le=2.0)
+    intonation: float = Field(default=1.0, ge=0.0, le=2.0)
     emotion: str = "neutral"
 
 class UnifiedVoiceService:
@@ -242,18 +243,19 @@ class UnifiedVoiceService:
         """VOICEVOX音声合成"""
         if not self.voicevox_client:
             raise Exception("VOICEVOXクライアントが初期化されていません")
-        
+
         profile = request.voice_profile
         speaker_id = profile.speaker_id
-        
+
         if speaker_id is None:
             raise ValueError("VOICEVOX話者IDが指定されていません")
-        
+
         return await self.voicevox_client.text_to_speech(
             text=request.text,
             speaker_id=speaker_id,
             speed_scale=request.speed,
             pitch_scale=request.pitch,
+            intonation_scale=request.intonation,
             volume_scale=request.volume
         )
     
@@ -288,6 +290,8 @@ class UnifiedVoiceService:
                     voice_profile=profile_dict,
                     language=profile.language,
                     speed=request.speed,
+                    pitch=request.pitch,
+                    volume=request.volume,
                     emotion=request.emotion
                 )
             except Exception as e:

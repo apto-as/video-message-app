@@ -98,16 +98,19 @@ class OpenVoiceHybridClient:
         voice_profile: Dict[str, Any],
         language: str = "ja",
         speed: float = 1.0,
+        pitch: float = 0.0,
+        volume: float = 1.0,
         emotion: str = "neutral"
     ) -> Optional[bytes]:
         """クローン音声合成（ハイブリッド）"""
-        
+
         logger.info(f"音声合成要求: プロファイル={voice_profile.get('id')}, テキスト長={len(text)}")
         logger.info(f"プロファイル詳細: 名前={voice_profile.get('name')}, 参照音声={voice_profile.get('reference_audio_path')}")
-        
+        logger.info(f"音声パラメータ: speed={speed}, pitch={pitch}, volume={volume}")
+
         # ネイティブサービス可用性チェック
         current_available = await self.native_client.check_service_health()
-        
+
         if current_available:
             try:
                 logger.info("ネイティブサービスで音声合成実行")
@@ -116,11 +119,14 @@ class OpenVoiceHybridClient:
                 if not profile_id:
                     logger.error("プロファイルIDが見つかりません")
                     raise ValueError("プロファイルIDが必要です")
-                
+
                 result = await self.native_client.synthesize_with_clone(
                     text=text,
                     profile_id=profile_id,
-                    language=language
+                    language=language,
+                    speed=speed,
+                    pitch=pitch,
+                    volume=volume
                 )
                 if result and len(result) > 1000:  # 実際の音声データかチェック
                     logger.info(f"ネイティブサービス音声合成成功: {len(result)} bytes")

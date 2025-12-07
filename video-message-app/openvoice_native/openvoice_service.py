@@ -627,14 +627,16 @@ class OpenVoiceNativeService:
         return VoiceProfile(**profile_data)
     
     async def synthesize_voice(
-        self, 
-        text: str, 
-        voice_profile_id: str, 
+        self,
+        text: str,
+        voice_profile_id: str,
         language: str = "ja",
-        speed: float = 1.0
+        speed: float = 1.0,
+        pitch: float = 0.0,
+        volume: float = 1.0
     ) -> VoiceSynthesisResponse:
         """音声合成"""
-        
+
         if not self._initialized:
             return VoiceSynthesisResponse(
                 success=False,
@@ -663,7 +665,7 @@ class OpenVoiceNativeService:
             
             # 音声合成実行
             audio_data = await self._synthesize_with_embedding(
-                text, embedding, language, speed
+                text, embedding, language, speed, pitch, volume
             )
             
             if not audio_data:
@@ -728,13 +730,15 @@ class OpenVoiceNativeService:
             return None
     
     async def _synthesize_with_embedding(
-        self, 
-        text: str, 
-        embedding: Dict, 
-        language: str, 
-        speed: float
+        self,
+        text: str,
+        embedding: Dict,
+        language: str,
+        speed: float,
+        pitch: float = 0.0,
+        volume: float = 1.0
     ) -> Optional[bytes]:
-        """埋め込みを使用した音声合成（OpenVoice V2公式方式）"""
+        """埋め込みを使用した音声合成（OpenVoice V2公式方式 + 後処理）"""
         try:
             import torch
             
@@ -802,12 +806,19 @@ class OpenVoiceNativeService:
                 )
                 
                 logger.info(f"[DEBUG] Tone color conversion complete: {output_path}, file exists: {os.path.exists(output_path)}")
-                
+
                 # 結果読み込み
                 async with aiofiles.open(output_path, 'rb') as f:
                     audio_data = await f.read()
-                
+
                 logger.info(f"[DEBUG] Audio data loaded: {len(audio_data)} bytes")
+
+                # 後処理: pitch/volume調整
+                if pitch != 0.0 or volume != 1.0:
+                    logger.info(f"[DEBUG] Applying audio effects: pitch={pitch}, volume={volume}")
+                    audio_data = await self._apply_audio_effects(audio_data, pitch, volume)
+                    logger.info(f"[DEBUG] Audio effects applied: {len(audio_data)} bytes")
+
                 return audio_data
                 
             finally:
@@ -822,6 +833,93 @@ class OpenVoiceNativeService:
             logger.error(f"音声合成エラー: {str(e)}")
             return None
     
+    async def _apply_audio_effects(self, audio_data: bytes, pitch: float, volume: float) -> bytes:
+        """FFmpegを使用して音声後処理（pitch/volume調整）
+
+        Args:
+            audio_data: 元の音声データ（WAV形式）
+            pitch: ピッチシフト（-0.15 to 0.15）
+            volume: 音量（0.0-2.0）
+
+        Returns:
+            処理後の音声データ（WAV形式）
+        """
+        import subprocess
+
+        # 一時ファイル生成
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as input_file:
+            input_file.write(audio_data)
+            input_path = input_file.name
+
+        output_path = input_path.replace('.wav', '_processed.wav')
+
+        try:
+            # FFmpegコマンド構築
+            # pitch: semitones (0.15 ≈ 2.5 semitones)
+            pitch_semitones = pitch * 16.67  # -0.15 to 0.15 → -2.5 to 2.5 semitones
+
+            # FFmpegフィルターチェーン構築
+            filters = []
+
+            # ピッチシフト（asetrate + aresample）
+            if pitch != 0.0:
+                # asetrate: サンプルレートを変更してピッチをシフト
+                # 2^(semitones/12) の式でピッチを計算
+                pitch_factor = 2 ** (pitch_semitones / 12)
+                filters.append(f"asetrate=44100*{pitch_factor}")
+                filters.append("aresample=44100")
+
+            # 音量調整
+            if volume != 1.0:
+                filters.append(f"volume={volume}")
+
+            # フィルターを結合
+            filter_chain = ",".join(filters)
+
+            # FFmpegコマンド実行
+            ffmpeg_cmd = [
+                'ffmpeg', '-y', '-i', input_path,
+                '-af', filter_chain,
+                output_path
+            ]
+
+            logger.info(f"[DEBUG] Running FFmpeg: {' '.join(ffmpeg_cmd)}")
+            result = subprocess.run(
+                ffmpeg_cmd,
+                check=True,
+                capture_output=True,
+                text=True
+            )
+
+            if result.stderr:
+                logger.debug(f"FFmpeg stderr: {result.stderr}")
+
+            # 処理後の音声データを読み込み
+            async with aiofiles.open(output_path, 'rb') as f:
+                processed_audio = await f.read()
+
+            logger.info(f"[DEBUG] Audio effects processing complete: {len(processed_audio)} bytes")
+            return processed_audio
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"FFmpeg処理エラー: {e.stderr}")
+            # エラー時は元の音声データを返す
+            return audio_data
+        except Exception as e:
+            logger.error(f"音声後処理エラー: {str(e)}")
+            # エラー時は元の音声データを返す
+            return audio_data
+        finally:
+            # クリーンアップ
+            try:
+                os.unlink(input_path)
+            except Exception:
+                pass
+            try:
+                os.unlink(output_path)
+            except Exception:
+                pass
+
     async def get_health_status(self) -> Dict[str, Any]:
         """ヘルスチェック"""
         model_files_status = {
