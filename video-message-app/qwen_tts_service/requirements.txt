@@ -1,0 +1,34 @@
+# Qwen3-TTS Service Requirements
+# Python 3.11 compatible
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+aiofiles>=23.2.1
+
+# Data Validation
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# PyTorch (CUDA version installed separately in Dockerfile)
+# torch>=2.0.0
+# torchaudio>=2.0.0
+
+# HuggingFace Transformers
+transformers>=4.36.0
+accelerate>=0.25.0
+safetensors>=0.4.0
+
+# Audio Processing
+scipy>=1.11.0
+numpy>=1.24.0,<2.0.0
+librosa>=0.10.0
+soundfile>=0.12.0
+
+# Optional: Flash Attention for faster inference (CUDA only)
+# flash-attn>=2.3.0  # Uncomment for CUDA with flash attention
+
+# Utilities
+httpx>=0.25.0
+python-dotenv>=1.0.0

@@ -1,0 +1,59 @@
+# Qwen3-TTS Service - Docker Compose Configuration
+# This file can be used standalone or merged with the main docker-compose.yml
+#
+# Standalone usage:
+#   docker-compose -f docker-compose.qwen.yml up -d
+#
+# Merged with main compose:
+#   docker-compose -f docker-compose.yml -f qwen_tts_service/docker-compose.qwen.yml up -d
+#
+# Or add the qwen3tts service to the main docker-compose.yml
+
+version: '3.8'
+
+services:
+  qwen3tts:
+    build:
+      context: ./qwen_tts_service
+      args:
+        USE_CUDA: ${USE_CUDA:-true}
+        DEVICE: ${DEVICE:-cuda}
+    container_name: qwen3_tts_service
+    runtime: nvidia  # NVIDIA Container Runtime for GPU access
+    ports:
+      - "8002:8002"
+    volumes:
+      # Shared storage with backend
+      - ./data/backend/storage:/app/storage
+      # HuggingFace model cache (persistent)
+      - qwen3-models:/app/models
+      # Temporary files
+      - qwen3-tmp:/tmp/qwen_tts
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - DEVICE=${DEVICE:-cuda}
+      - STORAGE_PATH=/app/storage
+      - MODELS_PATH=/app/models
+      - TEMP_PATH=/tmp/qwen_tts
+      - HF_HOME=/app/models/huggingface
+      - TRANSFORMERS_CACHE=/app/models/huggingface
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      - voice_network
+    restart: unless-stopped
+    # Deploy configuration for GPU
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+networks:
+  voice_network:
+    driver: bridge
+
+volumes:
+  qwen3-models:  # Persistent model cache
+  qwen3-tmp:     # Temporary files

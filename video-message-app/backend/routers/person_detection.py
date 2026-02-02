@@ -11,8 +11,39 @@ import numpy as np
 import cv2
 
 from services.person_detector import PersonDetector
+from core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# LaMa Inpainting service (lazy loaded)
+_inpainting_service = None
+
+def get_inpainting_service():
+    """Get or initialize inpainting service singleton"""
+    global _inpainting_service
+    if _inpainting_service is None:
+        try:
+            from services.inpainting_service import InpaintingService
+            _inpainting_service = InpaintingService(device=settings.inpainting_device)
+            logger.info("InpaintingService initialized successfully")
+        except ImportError as e:
+            logger.warning(f"InpaintingService not available: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to initialize InpaintingService: {e}")
+            return None
+    return _inpainting_service
+
+def release_inpainting_service():
+    """Release inpainting service and free VRAM"""
+    global _inpainting_service
+    if _inpainting_service is not None:
+        try:
+            _inpainting_service.unload_model()
+            _inpainting_service = None
+            logger.info("InpaintingService released")
+        except Exception as e:
+            logger.warning(f"Failed to release InpaintingService: {e}")
 
 router = APIRouter(prefix="/api/person-detection", tags=["person-detection"])
 
@@ -272,6 +303,56 @@ async def extract_selected_person(
                     alpha_matting_erode_size=10,
                     post_process_mask=True
                 )
+
+                # --- LaMa Inpainting Integration ---
+                # Repair clothing damaged by background removal
+                if settings.is_inpainting_enabled:
+                    try:
+                        inpainting_svc = get_inpainting_service()
+                        if inpainting_svc is not None:
+                            from PIL import Image
+                            from io import BytesIO
+
+                            # Convert numpy arrays to bytes for inpainting service
+                            pil_rembg = Image.fromarray(person_rgba)
+                            rembg_buffer = BytesIO()
+                            pil_rembg.save(rembg_buffer, format='PNG')
+                            rembg_bytes = rembg_buffer.getvalue()
+
+                            # Original region for reference
+                            pil_original = Image.fromarray(cv2.cvtColor(person_region, cv2.COLOR_BGR2RGB))
+                            original_buffer = BytesIO()
+                            pil_original.save(original_buffer, format='PNG')
+                            original_bytes = original_buffer.getvalue()
+
+                            # Person bbox within the cropped region
+                            region_bbox = {
+                                'x1': 0,
+                                'y1': 0,
+                                'x2': person_rgba.shape[1],
+                                'y2': person_rgba.shape[0]
+                            }
+
+                            # Run auto repair
+                            repaired_bytes, repair_stats = inpainting_svc.auto_repair(
+                                original_image=original_bytes,
+                                rembg_output=rembg_bytes,
+                                bbox=region_bbox,
+                                threshold=settings.get_inpainting_threshold,
+                                dilate_mask=settings.inpainting_dilate_mask
+                            )
+
+                            if repair_stats.get('repaired', False):
+                                # Load repaired image back to numpy
+                                repaired_img = Image.open(BytesIO(repaired_bytes))
+                                person_rgba = np.array(repaired_img)
+                                logger.info(f"LaMa inpainting applied: {repair_stats.get('damage_ratio', 0):.2%} damage repaired")
+                            else:
+                                logger.debug(f"No inpainting needed - damage {repair_stats.get('damage_ratio', 0):.2%} below threshold")
+
+                    except Exception as e:
+                        logger.warning(f"LaMa inpainting failed, using original rembg output: {e}")
+                # --- End LaMa Inpainting Integration ---
 
                 # Extract alpha channel as mask
                 if person_rgba.shape[2] == 4:
