@@ -40,6 +40,26 @@ services:
     # profiles:
     #   - with-openvoice  # Uncomment to make optional
 
+  musetalk:
+    build:
+      context: ./musetalk_service
+    container_name: musetalk_service
+    runtime: nvidia  # NVIDIA Container Runtime for GPU access
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./data/backend/storage:/app/storage
+      - ./data/musetalk/models:/app/models
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - LAZY_LOAD=true
+      - MAX_CONCURRENT_JOBS=2
+      - CLEAR_CACHE_AFTER_GENERATION=true
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      - voice_network
+    restart: unless-stopped
+
   backend:
     build: ./backend
     container_name: voice_backend
@@ -56,6 +76,7 @@ services:
       - ENVIRONMENT=docker
       - VOICEVOX_URL=http://voicevox:50021
       - OPENVOICE_SERVICE_URL=http://openvoice:8001  # Use container name instead of host.docker.internal
+      - MUSETALK_SERVICE_URL=http://musetalk:8003  # MuseTalk lip-sync service
       - D_ID_API_KEY=${D_ID_API_KEY:-your-d-id-api-key-here}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     networks:
@@ -63,6 +84,7 @@ services:
     depends_on:
       - voicevox
       - openvoice
+      - musetalk
     restart: unless-stopped
 
   frontend:
