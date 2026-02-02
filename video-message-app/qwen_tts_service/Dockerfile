@@ -4,7 +4,7 @@
 # ============================================
 # Base Stage
 # ============================================
-FROM nvidia/cuda:11.8-cudnn8-runtime-ubuntu22.04 AS cuda-base
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04 AS cuda-base
 
 # Build arguments
 ARG USE_CUDA=true

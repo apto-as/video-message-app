@@ -1,7 +1,7 @@
 # MuseTalk Lip-Sync Service Dockerfile
 # Base: NVIDIA CUDA 11.8 with cuDNN 8 for deep learning inference
 
-FROM nvidia/cuda:11.8-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
 # Prevent interactive prompts during installation
 ENV DEBIAN_FRONTEND=noninteractive
