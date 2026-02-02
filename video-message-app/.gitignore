@@ -134,12 +134,15 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
-# Logs
+# Logs (2025-11-22追加: 一時ログファイルを除外)
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+backend.log
+frontend.log
+startup.log
 
 # Database files
 *.db
@@ -171,3 +174,17 @@ generated_videos/
 # Test outputs
 test_output/
 test_results/
+
+# Archive files (2025-11-22追加: tar.gzを除外)
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Test audio files (2025-11-22追加: 一時的なテスト音声を除外)
+test_*.wav
+test_converted.wav
+test_synthesized_voice.wav
+
+# Document cleanup analysis report (2025-11-22追加: 分析レポートは保持)
+# DOCUMENT_CLEANUP_ANALYSIS.md は Git管理対象
