@@ -253,10 +253,10 @@ class MuseTalkClient:
         try:
             logger.info(f'Creating talk video: audio={audio_url}, source={source_url}')
 
-            # Submit video generation request
+            # Submit video generation request (MuseTalk expects Form data, not JSON)
             response = await self.client.post(
                 f'{self.base_url}/generate-video',
-                json={
+                data={
                     'audio_url': audio_url,
                     'source_url': source_url
                 },
