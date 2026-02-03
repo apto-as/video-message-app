@@ -82,10 +82,12 @@ RUN python -c "import torch; print(f'PyTorch {torch.__version__} installed, CUDA
 
 # Install MMLab packages required by MuseTalk (mmpose, mmcv, mmdet)
 # Note: mim requires torch to detect CUDA version for correct wheel selection
+# Note: chumpy must be installed before mmpose (has setup.py issues with pip)
 RUN python -m pip install --no-cache-dir -U openmim && \
     python -m mim install mmengine && \
     python -m mim install "mmcv==2.0.1" && \
     python -m mim install "mmdet==3.1.0" && \
+    python -m pip install --no-cache-dir chumpy && \
     python -m mim install "mmpose==1.1.0"
 
 # Install MuseTalk dependencies (MuseTalk is not a pip package, just scripts)
