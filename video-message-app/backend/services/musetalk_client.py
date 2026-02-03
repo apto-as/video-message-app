@@ -139,7 +139,7 @@ class MuseTalkClient:
                 content_type = 'image/png'
 
             files = {
-                'image': (filename, image_data, content_type)
+                'file': (filename, image_data, content_type)
             }
 
             logger.info(f'Uploading source image: {filename} ({len(image_data)} bytes)')
@@ -197,7 +197,7 @@ class MuseTalkClient:
             content_type = content_type_map.get(suffix, 'audio/wav')
 
             files = {
-                'audio': (filename, audio_data, content_type)
+                'file': (filename, audio_data, content_type)
             }
 
             logger.info(f'Uploading audio: {filename} ({len(audio_data)} bytes)')
