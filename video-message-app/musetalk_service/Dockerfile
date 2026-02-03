@@ -59,12 +59,12 @@ WORKDIR /app
 # Clone MuseTalk repository
 RUN git clone https://github.com/TMElyralab/MuseTalk.git ${MUSETALK_DIR}
 
-# Install PyTorch with CUDA support
-RUN pip install torch==2.1.2+cu118 torchvision==0.16.2+cu118 torchaudio==2.1.2+cu118 \
+# Install PyTorch with CUDA support (explicitly use python -m pip for consistency)
+RUN python -m pip install torch==2.1.2+cu118 torchvision==0.16.2+cu118 torchaudio==2.1.2+cu118 \
     --index-url https://download.pytorch.org/whl/cu118
 
 # Install dlib with CUDA support (build from source for GPU acceleration)
-RUN pip install cmake && \
+RUN python -m pip install cmake && \
     git clone https://github.com/davisking/dlib.git /tmp/dlib && \
     cd /tmp/dlib && \
     mkdir build && cd build && \
@@ -75,14 +75,18 @@ RUN pip install cmake && \
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir -r requirements.txt
+
+# Verify PyTorch is available before MMLab installation
+RUN python -c "import torch; print(f'PyTorch {torch.__version__} installed, CUDA: {torch.cuda.is_available()}')"
 
 # Install MMLab packages required by MuseTalk (mmpose, mmcv, mmdet)
-RUN pip install --no-cache-dir -U openmim && \
-    mim install mmengine && \
-    mim install "mmcv==2.0.1" && \
-    mim install "mmdet==3.1.0" && \
-    mim install "mmpose==1.1.0"
+# Note: mim requires torch to detect CUDA version for correct wheel selection
+RUN python -m pip install --no-cache-dir -U openmim && \
+    python -m mim install mmengine && \
+    python -m mim install "mmcv==2.0.1" && \
+    python -m mim install "mmdet==3.1.0" && \
+    python -m mim install "mmpose==1.1.0"
 
 # Install MuseTalk dependencies (MuseTalk is not a pip package, just scripts)
 WORKDIR ${MUSETALK_DIR}
