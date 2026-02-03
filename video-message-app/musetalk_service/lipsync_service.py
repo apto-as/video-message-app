@@ -28,21 +28,42 @@ class MuseTalkInference:
 
     def __init__(self, preloaded_models=None, preloaded_audio_processor=None):
         self.device = Config.get_device()
-        self.model_loaded = False
         self.last_used = time.time()
         self._lock = threading.Lock()
-        self._preloaded_models = preloaded_models  # Models pre-loaded before uvicorn
-        self._preloaded_audio_processor = preloaded_audio_processor  # AudioProcessor pre-loaded
 
-        # Model components (lazy loaded)
+        # Model components
         self.audio_processor = None
         self.vae = None
         self.unet = None
         self.pe = None
         self.timesteps = None
-
-        # MuseTalk specific
         self.musetalk_loaded = False
+        self.model_loaded = False
+
+        # If pre-loaded models are available, use them immediately
+        # This avoids CUDA/asyncio segfault by not importing modules later
+        if preloaded_models is not None and preloaded_audio_processor is not None:
+            logger.info("Using pre-loaded models - skipping lazy loading")
+            self.vae, self.unet, self.pe = preloaded_models
+            self.audio_processor = preloaded_audio_processor
+
+            # Move models to device
+            if self.device == "cuda":
+                self.vae.vae = self.vae.vae.half().to(self.device)
+                self.unet.model = self.unet.model.half().to(self.device)
+                self.pe = self.pe.half().to(self.device)
+            else:
+                self.vae.vae = self.vae.vae.to(self.device)
+                self.unet.model = self.unet.model.to(self.device)
+                self.pe = self.pe.to(self.device)
+
+            # Set timesteps
+            self.timesteps = torch.tensor([0], device=self.device)
+
+            self.model_loaded = True
+            self.musetalk_loaded = True
+            logger.info("Pre-loaded models ready for inference")
+            self._log_vram_usage()
 
         logger.info(f"MuseTalk inference initialized with device: {self.device}")
 
@@ -55,15 +76,21 @@ class MuseTalkInference:
 
     def load_models(self) -> bool:
         """Load all MuseTalk models"""
+        # If already loaded (either pre-loaded or dynamically), return success
         if self.model_loaded:
+            logger.info("Models already loaded")
             return True
 
         with self._lock:
             if self.model_loaded:
                 return True
 
+            # WARNING: Dynamic loading can cause CUDA/asyncio segfault
+            # Models should be pre-loaded before uvicorn starts
+            logger.warning("Dynamic model loading - this may cause segfault under uvicorn!")
+
             try:
-                logger.info("Loading MuseTalk models...")
+                logger.info("Loading MuseTalk models dynamically...")
                 self._add_musetalk_to_path()
 
                 # Import MuseTalk modules
@@ -71,24 +98,13 @@ class MuseTalkInference:
                 from musetalk.utils.preprocessing import get_landmark_and_bbox
                 from musetalk.utils.audio_processor import AudioProcessor
 
-                # Use pre-loaded models if available (avoids CUDA/asyncio segfault)
-                if self._preloaded_models is not None:
-                    logger.info("Using pre-loaded models from main.py")
-                    self.vae, self.unet, self.pe = self._preloaded_models
-                else:
-                    # Load models - load_all_model returns (vae, unet, pe)
-                    logger.info("Loading models dynamically...")
-                    self.vae, self.unet, self.pe = load_all_model(device=self.device)
+                # Load models - load_all_model returns (vae, unet, pe)
+                self.vae, self.unet, self.pe = load_all_model(device=self.device)
 
                 # Load audio processor
-                if self._preloaded_audio_processor is not None:
-                    logger.info("Using pre-loaded AudioProcessor")
-                    self.audio_processor = self._preloaded_audio_processor
-                else:
-                    # AudioProcessor uses whisper for feature extraction
-                    whisper_model_dir = str(Config.MODELS_DIR / "whisper")
-                    self.audio_processor = AudioProcessor(feature_extractor_path=whisper_model_dir)
-                    logger.info(f"Audio processor loaded from {whisper_model_dir}")
+                whisper_model_dir = str(Config.MODELS_DIR / "whisper")
+                self.audio_processor = AudioProcessor(feature_extractor_path=whisper_model_dir)
+                logger.info(f"Audio processor loaded from {whisper_model_dir}")
 
                 # Move models to device (MuseTalk wraps models in container classes)
                 if self.device == "cuda":
@@ -506,12 +522,16 @@ class JobQueue:
                 await asyncio.sleep(1)
 
 
-# Global instances - defer initialization to allow pre-loaded models injection
+# Global instances - initialized by main.py with pre-loaded models
 inference_engine = None
 job_queue = None
 
 def init_globals(preloaded_models=None, preloaded_audio_processor=None):
-    """Initialize global instances with optional pre-loaded models"""
+    """Initialize global instances with optional pre-loaded models
+
+    IMPORTANT: For CUDA environments, preloaded_models and preloaded_audio_processor
+    MUST be provided to avoid segfault caused by CUDA/asyncio interaction.
+    """
     global inference_engine, job_queue
     inference_engine = MuseTalkInference(
         preloaded_models=preloaded_models,
@@ -519,7 +539,3 @@ def init_globals(preloaded_models=None, preloaded_audio_processor=None):
     )
     job_queue = JobQueue()
     return inference_engine, job_queue
-
-# Default initialization (will be overridden by main.py if pre-loaded models available)
-inference_engine = MuseTalkInference()
-job_queue = JobQueue()
