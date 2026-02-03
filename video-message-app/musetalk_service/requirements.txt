@@ -38,7 +38,7 @@ safetensors==0.4.2
 
 # Face detection and processing
 face-alignment==1.4.1
-dlib==19.24.2
+# dlib is built from source in Dockerfile (requires CUDA build from git)
 mediapipe==0.10.9
 
 # Whisper for audio feature extraction
