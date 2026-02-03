@@ -84,10 +84,11 @@ class HealthCheckResponse(BaseModel):
     version: str = Field(default="1.0.0", description="Service version")
     model_loaded: bool = Field(..., description="Whether model is loaded")
     pytorch_device: str = Field(..., description="PyTorch device")
-    model_files_status: Dict[str, bool] = Field(default_factory=dict, description="Model file status")
+    model_files_status: Dict[str, Any] = Field(default_factory=dict, description="Model file status")
     # Additional fields for Qwen3-TTS
     model_name: Optional[str] = Field(None, description="Model name")
     vram_usage_mb: Optional[float] = Field(None, description="VRAM usage in MB")
+    gpu_name: Optional[str] = Field(None, description="GPU device name")
 
 
 class ErrorResponse(BaseModel):

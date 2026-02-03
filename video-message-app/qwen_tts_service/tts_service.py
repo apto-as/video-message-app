@@ -216,7 +216,7 @@ class Qwen3TTSService:
 
         if config.device == "cuda" and torch.cuda.is_available():
             status["model_files_status"]["cuda_available"] = True
-            status["model_files_status"]["gpu_name"] = torch.cuda.get_device_name(0)
+            status["gpu_name"] = torch.cuda.get_device_name(0)
 
         return status
 
