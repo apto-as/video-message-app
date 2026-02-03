@@ -67,18 +67,25 @@ class MuseTalkInference:
                 # Import MuseTalk modules
                 from musetalk.utils.utils import load_all_model
                 from musetalk.utils.preprocessing import get_landmark_and_bbox
+                from musetalk.utils.audio_processor import AudioProcessor
 
-                # Load models
-                self.audio_processor, self.vae, self.unet, self.pe = load_all_model()
+                # Load models - load_all_model returns (vae, unet, pe)
+                self.vae, self.unet, self.pe = load_all_model(device=self.device)
 
-                # Move to device
+                # Load audio processor separately
+                # AudioProcessor uses whisper for feature extraction
+                whisper_model_dir = str(Config.MODELS_DIR / "whisper")
+                self.audio_processor = AudioProcessor(feature_extractor_path=whisper_model_dir)
+                logger.info(f"Audio processor loaded from {whisper_model_dir}")
+
+                # Move models to device (MuseTalk wraps models in container classes)
                 if self.device == "cuda":
-                    self.vae = self.vae.half().to(self.device)
-                    self.unet = self.unet.half().to(self.device)
+                    self.vae.vae = self.vae.vae.half().to(self.device)
+                    self.unet.model = self.unet.model.half().to(self.device)
                     self.pe = self.pe.half().to(self.device)
                 else:
-                    self.vae = self.vae.to(self.device)
-                    self.unet = self.unet.to(self.device)
+                    self.vae.vae = self.vae.vae.to(self.device)
+                    self.unet.model = self.unet.model.to(self.device)
                     self.pe = self.pe.to(self.device)
 
                 # Set timesteps

@@ -98,6 +98,10 @@ RUN if [ -f "requirements.txt" ]; then pip install --no-cache-dir -r requirement
 WORKDIR /app
 ENV PYTHONPATH="${MUSETALK_DIR}:${PYTHONPATH}"
 
+# Create symlink from MuseTalk models to app models (volume mount point)
+# MuseTalk's load_all_model() uses relative paths like "models/sd-vae"
+RUN rm -rf ${MUSETALK_DIR}/models && ln -s ${MODELS_DIR} ${MUSETALK_DIR}/models
+
 # Copy application code
 COPY config.py /app/config.py
 COPY models.py /app/models.py

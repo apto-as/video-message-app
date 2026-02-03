@@ -3,6 +3,15 @@ MuseTalk Lip-Sync Service - FastAPI Application
 
 A D-ID API compatible service for lip-sync video generation using MuseTalk v1.5
 """
+# CRITICAL: Initialize CUDA before any async imports to avoid segfault
+# PyTorch CUDA must be initialized before uvicorn's event loop starts
+import torch
+if torch.cuda.is_available():
+    # Force CUDA initialization in main process
+    torch.cuda.init()
+    _ = torch.zeros(1, device='cuda')
+    del _
+
 import asyncio
 import hashlib
 import logging

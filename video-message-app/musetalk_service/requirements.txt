@@ -35,6 +35,7 @@ diffusers==0.25.1
 transformers==4.37.2
 accelerate==0.26.1
 safetensors==0.4.2
+huggingface-hub>=0.19.3,<1.0  # Required by transformers 4.37.x (not compatible with >=1.0)
 
 # Face detection and processing
 face-alignment==1.4.1
