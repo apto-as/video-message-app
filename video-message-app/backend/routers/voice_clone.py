@@ -1,12 +1,13 @@
 """
 音声クローン登録ルーター
-OpenVoice V2を使用したカスタム音声の登録
+Qwen3-TTS または OpenVoice V2を使用したカスタム音声の登録
+設定 (USE_LOCAL_TTS) に基づいてクライアントを自動選択
 """
 
 from fastapi import APIRouter, HTTPException, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import tempfile
 import asyncio
 from pathlib import Path
@@ -18,8 +19,92 @@ import os
 
 import logging
 
+from core.config import settings
+
 router = APIRouter(prefix="/voice-clone", tags=["Voice Clone"])
 logger = logging.getLogger(__name__)
+
+
+def get_tts_client():
+    """
+    設定に基づいて適切なTTSクライアントを取得する。
+
+    Returns:
+        Qwen3TTSClient or OpenVoiceHybridClient instance
+    """
+    if settings.should_use_local_tts:
+        from services.qwen_tts_client import Qwen3TTSClient
+        logger.info("Using Qwen3-TTS client for voice synthesis")
+        return Qwen3TTSClient()
+    else:
+        from services.openvoice_hybrid_client import OpenVoiceHybridClient
+        logger.info("Using OpenVoice client for voice synthesis")
+        return OpenVoiceHybridClient()
+
+
+def get_tts_provider_name() -> str:
+    """現在のTTSプロバイダー名を取得"""
+    return "qwen3-tts" if settings.should_use_local_tts else "openvoice"
+
+
+async def synthesize_with_client(
+    client: Any,
+    text: str,
+    voice_profile: Dict[str, Any],
+    language: str = "ja"
+) -> bytes:
+    """
+    TTSクライアントの違いを吸収して音声合成を実行する。
+
+    Args:
+        client: TTSクライアント（Qwen3TTSClient or OpenVoiceHybridClient）
+        text: 合成するテキスト
+        voice_profile: 音声プロファイル情報
+        language: 言語コード
+
+    Returns:
+        bytes: WAV音声データ
+    """
+    if settings.should_use_local_tts:
+        # Qwen3TTSClient uses profile_id directly
+        profile_id = voice_profile.get('id')
+        if not profile_id:
+            raise ValueError("Voice profile ID is required for Qwen3-TTS")
+        return await client.synthesize_with_clone(
+            text=text,
+            profile_id=profile_id,
+            language=language
+        )
+    else:
+        # OpenVoiceHybridClient uses full profile dict
+        return await client.synthesize_with_clone(
+            text=text,
+            voice_profile=voice_profile,
+            language=language
+        )
+
+
+async def check_client_availability(client: Any) -> Dict[str, Any]:
+    """
+    TTSクライアントの可用性を確認する。
+
+    Args:
+        client: TTSクライアント
+
+    Returns:
+        dict: 可用性情報
+    """
+    if settings.should_use_local_tts:
+        # Qwen3TTSClient uses check_service_health
+        is_healthy = await client.check_service_health()
+        return {
+            'provider': 'qwen3-tts',
+            'available': is_healthy,
+            'native_service': is_healthy
+        }
+    else:
+        # OpenVoiceHybridClient uses check_service_availability
+        return await client.check_service_availability()
 
 class VoiceCloneResponse(BaseModel):
     success: bool
@@ -164,25 +249,26 @@ async def register_voice_clone(
                     detail=f"音声変換処理でエラーが発生しました: {str(e)}"
                 )
         
-        # 【重要】まずOpenVoice処理を実行し、成功した場合のみファイル保存を行う
+        # 【重要】まずTTS処理を実行し、成功した場合のみファイル保存を行う
         voice_embedding = None
-        
-        # OpenVoice ハイブリッドクライアント（遅延インポート）
+
+        # TTSクライアント取得（設定に基づいて自動選択）
         try:
-            from services.openvoice_hybrid_client import OpenVoiceHybridClient
-            openvoice_client = OpenVoiceHybridClient()
+            tts_client = get_tts_client()
+            provider_name = get_tts_provider_name()
+            logger.info(f"TTSプロバイダー: {provider_name}")
         except ImportError as e:
-            logger.error(f"OpenVoiceHybridClient インポートエラー: {str(e)}")
+            logger.error(f"TTSクライアント インポートエラー: {str(e)}")
             raise HTTPException(
                 status_code=500,
-                detail="OpenVoice機能が利用できません"
+                detail="TTS機能が利用できません"
             )
-        
+
         try:
-            # ハイブリッドクライアント初期化
-            async with openvoice_client:
+            # TTSクライアント初期化
+            async with tts_client:
                 # 音声特徴抽出とモデル作成
-                voice_embedding = await openvoice_client.create_voice_clone(
+                voice_embedding = await tts_client.create_voice_clone(
                     name=name,
                     audio_paths=sample_paths,
                     language=language,
@@ -258,7 +344,7 @@ async def register_voice_clone(
                 "created_at": datetime.now().isoformat(),
                 "sample_count": len(audio_samples),
                 "status": "ready",
-                "provider": "openvoice",
+                "provider": provider_name,
                 "voice_type": "cloned",
                 # Native Serviceから返された埋め込みファイルパスを使用
                 "embedding_path": voice_embedding.get("embedding_path") or voice_embedding.get("path"),
@@ -325,7 +411,14 @@ async def get_voice_profiles():
     try:
         from services.voice_storage_service import VoiceStorageService
         storage_service = VoiceStorageService()
-        profiles = await storage_service.get_all_voice_profiles(provider="openvoice")
+        # 現在のプロバイダーと互換性のあるプロファイルを取得
+        # qwen3-ttsとopenvoiceの両方のプロファイルを取得（後方互換性）
+        current_provider = get_tts_provider_name()
+        profiles = await storage_service.get_all_voice_profiles(provider=current_provider)
+        # openvoiceプロファイルも追加（qwen3-ttsでも使用可能）
+        if current_provider == "qwen3-tts":
+            openvoice_profiles = await storage_service.get_all_voice_profiles(provider="openvoice")
+            profiles.extend(openvoice_profiles)
         
         return [
             VoiceProfile(**profile)
@@ -389,32 +482,33 @@ async def test_generate_voice_with_existing_samples(
             if not Path(f).exists():
                 raise HTTPException(status_code=404, detail=f"サンプルファイルが見つかりません: {f}")
         
-        # OpenVoice ハイブリッドクライアントで処理
-        from services.openvoice_hybrid_client import OpenVoiceHybridClient
-        
-        async with OpenVoiceHybridClient() as openvoice_client:
+        # TTSクライアントで処理（設定に基づいて自動選択）
+        tts_client = get_tts_client()
+
+        async with tts_client:
             # 音声クローン作成
-            voice_embedding = await openvoice_client.create_voice_clone(
+            voice_embedding = await tts_client.create_voice_clone(
                 name="test-existing-samples-clone",
                 audio_paths=sample_files,
                 language="ja",
                 profile_id=f"test_existing_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             )
-            
+
             if not voice_embedding or not voice_embedding.get('success'):
                 raise HTTPException(status_code=500, detail="音声クローン作成に失敗しました")
-            
+
             logger.info(f"テスト用音声クローン作成成功: {voice_embedding.get('profile_id')}")
-            
+
             # テスト用プロファイル
             test_profile = {
                 'id': voice_embedding.get('profile_id'),
                 'name': 'test-existing-samples-clone',
                 'reference_audio_path': sample_files[0]
             }
-            
-            # 音声合成
-            audio_data = await openvoice_client.synthesize_with_clone(
+
+            # 音声合成（クライアントの違いを吸収）
+            audio_data = await synthesize_with_client(
+                client=tts_client,
                 text=text,
                 voice_profile=test_profile,
                 language="ja"
@@ -482,15 +576,16 @@ async def test_voice_profile(
         
         logger.info(f"プロファイル取得成功: {profile.get('name')} (ID: {profile_id}, 参照音声: {profile.get('reference_audio_path')})")
         
-        # OpenVoice ハイブリッドクライアントで音声合成（遅延インポート）
-        from services.openvoice_hybrid_client import OpenVoiceHybridClient
-        
-        async with OpenVoiceHybridClient() as openvoice_client:
+        # TTSクライアントで音声合成（設定に基づいて自動選択）
+        tts_client = get_tts_client()
+
+        async with tts_client:
             # サービス可用性をログ出力
-            availability = await openvoice_client.check_service_availability()
-            logger.info(f"OpenVoiceサービス状態: {availability}")
-            
-            audio_data = await openvoice_client.synthesize_with_clone(
+            availability = await check_client_availability(tts_client)
+            logger.info(f"TTSサービス状態: {availability}")
+
+            audio_data = await synthesize_with_client(
+                client=tts_client,
                 text=text,
                 voice_profile=profile,
                 language=profile.get("language", "ja")

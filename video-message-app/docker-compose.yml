@@ -10,6 +10,8 @@ services:
       - voice_network
     restart: unless-stopped
 
+  # OpenVoice service - DISABLED (replaced by qwen-tts for local inference)
+  # To re-enable: remove profiles: [disabled] line
   openvoice:
     build:
       context: ./openvoice_native
@@ -36,9 +38,29 @@ services:
     networks:
       - voice_network
     restart: unless-stopped
-    # Conditional deployment based on profile
-    # profiles:
-    #   - with-openvoice  # Uncomment to make optional
+    profiles:
+      - disabled  # Service disabled - use qwen-tts instead
+
+  # Qwen3 TTS Service - Local inference replacement for OpenVoice
+  qwen-tts:
+    build:
+      context: ./qwen_tts_service
+    container_name: qwen3_tts_service
+    runtime: nvidia
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./data/backend/storage:/app/storage
+      - qwen3-models:/app/models
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - DEVICE=${DEVICE:-cuda}
+      - STORAGE_PATH=/app/storage
+      - LAZY_LOAD=true
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      - voice_network
+    restart: unless-stopped
 
   musetalk:
     build:
@@ -75,15 +97,17 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - ENVIRONMENT=docker
       - VOICEVOX_URL=http://voicevox:50021
-      - OPENVOICE_SERVICE_URL=http://openvoice:8001  # Use container name instead of host.docker.internal
+      - QWEN_TTS_SERVICE_URL=http://qwen-tts:8002  # Qwen3-TTS voice cloning service
       - MUSETALK_SERVICE_URL=http://musetalk:8003  # MuseTalk lip-sync service
-      - D_ID_API_KEY=${D_ID_API_KEY:-your-d-id-api-key-here}
+      - USE_LOCAL_TTS=true  # Use local Qwen3-TTS instead of OpenVoice
+      - USE_LOCAL_LIPSYNC=true  # Use local MuseTalk instead of D-ID API
+      - D_ID_API_KEY=${D_ID_API_KEY:-your-d-id-api-key-here}  # Fallback to D-ID if needed
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     networks:
       - voice_network
     depends_on:
       - voicevox
-      - openvoice
+      - qwen-tts  # Changed from openvoice to qwen-tts for local inference
       - musetalk
     restart: unless-stopped
 
@@ -123,3 +147,4 @@ networks:
 
 volumes:
   openvoice-tmp:  # OpenVoice一時ファイル用ボリューム（自動削除）
+  qwen3-models:   # Qwen3 TTS model cache volume

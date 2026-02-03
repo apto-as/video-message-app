@@ -1,7 +1,19 @@
 """
 OpenVoice Native Service Client
 Dockerバックエンドからネイティブサービスへの接続クライアント
+
+DEPRECATED: This module is deprecated as of 2026-02-03.
+Use services.qwen_tts_client.Qwen3TTSClient instead.
+
+This module is kept for backwards compatibility and fallback scenarios.
+Set USE_LOCAL_TTS=false to use OpenVoice instead of Qwen3-TTS.
 """
+import warnings
+warnings.warn(
+    "openvoice_native_client is deprecated, use qwen_tts_client instead",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 import httpx
 import asyncio

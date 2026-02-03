@@ -1,7 +1,28 @@
 """
 OpenVoice ハイブリッドクライアント
 ネイティブサービス優先、フォールバック機能付き
+
+DEPRECATED: This module is deprecated as of 2026-02-03.
+Use services.qwen_tts_client.Qwen3TTSClient instead.
+
+This module is kept for backwards compatibility and fallback scenarios.
+Set USE_LOCAL_TTS=false to use this client instead of Qwen3-TTS.
+
+Migration guide:
+    # Old way
+    from services.openvoice_hybrid_client import OpenVoiceHybridClient
+    client = OpenVoiceHybridClient()
+
+    # New way
+    from services.qwen_tts_client import Qwen3TTSClient
+    client = Qwen3TTSClient()
 """
+import warnings
+warnings.warn(
+    "openvoice_hybrid_client is deprecated, use qwen_tts_client instead",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 import os
 import asyncio

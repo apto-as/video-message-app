@@ -1,7 +1,19 @@
 """
 D-ID API クライアント（動画生成機能のみ）
 音声クローニング機能は削除し、OpenVoice V2を使用
+
+DEPRECATED: This module is deprecated as of 2026-02-03.
+Use services.musetalk_client.MuseTalkClient for lip-sync video generation.
+
+This module is kept for backwards compatibility and fallback scenarios.
+Set USE_LOCAL_LIPSYNC=false to use D-ID API instead of MuseTalk.
 """
+import warnings
+warnings.warn(
+    "d_id_client is deprecated, use musetalk_client instead",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 import os
 import httpx
