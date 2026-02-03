@@ -3,14 +3,30 @@ MuseTalk Lip-Sync Service - FastAPI Application
 
 A D-ID API compatible service for lip-sync video generation using MuseTalk v1.5
 """
-# CRITICAL: Initialize CUDA before any async imports to avoid segfault
-# PyTorch CUDA must be initialized before uvicorn's event loop starts
+# CRITICAL: Initialize CUDA and load models BEFORE uvicorn starts
+# PyTorch CUDA + MuseTalk models must be loaded before uvicorn's event loop
+# to avoid segfault caused by CUDA/asyncio interaction
 import torch
+import sys
+import os
+
+# Add MuseTalk to path early
+musetalk_dir = os.getenv("MUSETALK_DIR", "/app/MuseTalk")
+if musetalk_dir not in sys.path:
+    sys.path.insert(0, musetalk_dir)
+
+# Pre-load models synchronously BEFORE any async imports
+_preloaded_models = None
 if torch.cuda.is_available():
-    # Force CUDA initialization in main process
+    print("Pre-loading MuseTalk models to avoid CUDA/asyncio segfault...")
     torch.cuda.init()
-    _ = torch.zeros(1, device='cuda')
-    del _
+    try:
+        from musetalk.utils.utils import load_all_model
+        _preloaded_models = load_all_model(device="cuda")
+        print(f"Pre-loaded models: {type(_preloaded_models)}, count: {len(_preloaded_models)}")
+    except Exception as e:
+        print(f"Warning: Failed to pre-load models: {e}")
+        _preloaded_models = None
 
 import asyncio
 import hashlib
@@ -39,7 +55,10 @@ from models import (
     VideoGenerationResponse,
     JobData
 )
-from lipsync_service import inference_engine, job_queue
+from lipsync_service import init_globals
+
+# Initialize global instances with pre-loaded models to avoid CUDA/asyncio segfault
+inference_engine, job_queue = init_globals(preloaded_models=_preloaded_models)
 
 # Configure logging
 logging.basicConfig(

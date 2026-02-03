@@ -26,11 +26,12 @@ logger = logging.getLogger(__name__)
 class MuseTalkInference:
     """MuseTalk model wrapper for lip-sync video generation"""
 
-    def __init__(self):
+    def __init__(self, preloaded_models=None):
         self.device = Config.get_device()
         self.model_loaded = False
         self.last_used = time.time()
         self._lock = threading.Lock()
+        self._preloaded_models = preloaded_models  # Models pre-loaded before uvicorn
 
         # Model components (lazy loaded)
         self.audio_processor = None
@@ -69,8 +70,14 @@ class MuseTalkInference:
                 from musetalk.utils.preprocessing import get_landmark_and_bbox
                 from musetalk.utils.audio_processor import AudioProcessor
 
-                # Load models - load_all_model returns (vae, unet, pe)
-                self.vae, self.unet, self.pe = load_all_model(device=self.device)
+                # Use pre-loaded models if available (avoids CUDA/asyncio segfault)
+                if self._preloaded_models is not None:
+                    logger.info("Using pre-loaded models from main.py")
+                    self.vae, self.unet, self.pe = self._preloaded_models
+                else:
+                    # Load models - load_all_model returns (vae, unet, pe)
+                    logger.info("Loading models dynamically...")
+                    self.vae, self.unet, self.pe = load_all_model(device=self.device)
 
                 # Load audio processor separately
                 # AudioProcessor uses whisper for feature extraction
@@ -494,6 +501,17 @@ class JobQueue:
                 await asyncio.sleep(1)
 
 
-# Global instances
+# Global instances - defer initialization to allow pre-loaded models injection
+inference_engine = None
+job_queue = None
+
+def init_globals(preloaded_models=None):
+    """Initialize global instances with optional pre-loaded models"""
+    global inference_engine, job_queue
+    inference_engine = MuseTalkInference(preloaded_models=preloaded_models)
+    job_queue = JobQueue()
+    return inference_engine, job_queue
+
+# Default initialization (will be overridden by main.py if pre-loaded models available)
 inference_engine = MuseTalkInference()
 job_queue = JobQueue()
