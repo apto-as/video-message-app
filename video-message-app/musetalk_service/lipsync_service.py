@@ -26,12 +26,13 @@ logger = logging.getLogger(__name__)
 class MuseTalkInference:
     """MuseTalk model wrapper for lip-sync video generation"""
 
-    def __init__(self, preloaded_models=None):
+    def __init__(self, preloaded_models=None, preloaded_audio_processor=None):
         self.device = Config.get_device()
         self.model_loaded = False
         self.last_used = time.time()
         self._lock = threading.Lock()
         self._preloaded_models = preloaded_models  # Models pre-loaded before uvicorn
+        self._preloaded_audio_processor = preloaded_audio_processor  # AudioProcessor pre-loaded
 
         # Model components (lazy loaded)
         self.audio_processor = None
@@ -79,11 +80,15 @@ class MuseTalkInference:
                     logger.info("Loading models dynamically...")
                     self.vae, self.unet, self.pe = load_all_model(device=self.device)
 
-                # Load audio processor separately
-                # AudioProcessor uses whisper for feature extraction
-                whisper_model_dir = str(Config.MODELS_DIR / "whisper")
-                self.audio_processor = AudioProcessor(feature_extractor_path=whisper_model_dir)
-                logger.info(f"Audio processor loaded from {whisper_model_dir}")
+                # Load audio processor
+                if self._preloaded_audio_processor is not None:
+                    logger.info("Using pre-loaded AudioProcessor")
+                    self.audio_processor = self._preloaded_audio_processor
+                else:
+                    # AudioProcessor uses whisper for feature extraction
+                    whisper_model_dir = str(Config.MODELS_DIR / "whisper")
+                    self.audio_processor = AudioProcessor(feature_extractor_path=whisper_model_dir)
+                    logger.info(f"Audio processor loaded from {whisper_model_dir}")
 
                 # Move models to device (MuseTalk wraps models in container classes)
                 if self.device == "cuda":
@@ -505,10 +510,13 @@ class JobQueue:
 inference_engine = None
 job_queue = None
 
-def init_globals(preloaded_models=None):
+def init_globals(preloaded_models=None, preloaded_audio_processor=None):
     """Initialize global instances with optional pre-loaded models"""
     global inference_engine, job_queue
-    inference_engine = MuseTalkInference(preloaded_models=preloaded_models)
+    inference_engine = MuseTalkInference(
+        preloaded_models=preloaded_models,
+        preloaded_audio_processor=preloaded_audio_processor
+    )
     job_queue = JobQueue()
     return inference_engine, job_queue
 

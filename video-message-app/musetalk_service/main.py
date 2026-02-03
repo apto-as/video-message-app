@@ -15,18 +15,32 @@ musetalk_dir = os.getenv("MUSETALK_DIR", "/app/MuseTalk")
 if musetalk_dir not in sys.path:
     sys.path.insert(0, musetalk_dir)
 
-# Pre-load models synchronously BEFORE any async imports
+# Pre-load ALL models synchronously BEFORE any async imports
+# This includes vae, unet, pe, AND AudioProcessor to avoid CUDA/asyncio segfault
 _preloaded_models = None
+_preloaded_audio_processor = None
 if torch.cuda.is_available():
     print("Pre-loading MuseTalk models to avoid CUDA/asyncio segfault...")
     torch.cuda.init()
     try:
         from musetalk.utils.utils import load_all_model
+        from musetalk.utils.audio_processor import AudioProcessor
+
+        # Load main models
         _preloaded_models = load_all_model(device="cuda")
         print(f"Pre-loaded models: {type(_preloaded_models)}, count: {len(_preloaded_models)}")
+
+        # Load audio processor
+        models_dir = os.getenv("MODELS_DIR", "/app/models")
+        whisper_model_dir = os.path.join(models_dir, "whisper")
+        _preloaded_audio_processor = AudioProcessor(feature_extractor_path=whisper_model_dir)
+        print(f"Pre-loaded AudioProcessor from {whisper_model_dir}")
     except Exception as e:
         print(f"Warning: Failed to pre-load models: {e}")
+        import traceback
+        traceback.print_exc()
         _preloaded_models = None
+        _preloaded_audio_processor = None
 
 import asyncio
 import hashlib
@@ -58,7 +72,10 @@ from models import (
 from lipsync_service import init_globals
 
 # Initialize global instances with pre-loaded models to avoid CUDA/asyncio segfault
-inference_engine, job_queue = init_globals(preloaded_models=_preloaded_models)
+inference_engine, job_queue = init_globals(
+    preloaded_models=_preloaded_models,
+    preloaded_audio_processor=_preloaded_audio_processor
+)
 
 # Configure logging
 logging.basicConfig(
