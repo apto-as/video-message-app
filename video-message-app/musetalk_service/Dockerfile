@@ -77,6 +77,13 @@ RUN pip install cmake && \
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install MMLab packages required by MuseTalk (mmpose, mmcv, mmdet)
+RUN pip install --no-cache-dir -U openmim && \
+    mim install mmengine && \
+    mim install "mmcv==2.0.1" && \
+    mim install "mmdet==3.1.0" && \
+    mim install "mmpose==1.1.0"
+
 # Install MuseTalk dependencies (MuseTalk is not a pip package, just scripts)
 WORKDIR ${MUSETALK_DIR}
 RUN if [ -f "requirements.txt" ]; then pip install --no-cache-dir -r requirements.txt; fi
