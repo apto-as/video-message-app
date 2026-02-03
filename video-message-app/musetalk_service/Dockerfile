@@ -77,13 +77,13 @@ RUN pip install cmake && \
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install MuseTalk dependencies
+# Install MuseTalk dependencies (MuseTalk is not a pip package, just scripts)
 WORKDIR ${MUSETALK_DIR}
 RUN if [ -f "requirements.txt" ]; then pip install --no-cache-dir -r requirements.txt; fi
-RUN pip install -e .
 
-# Return to app directory
+# Return to app directory and set PYTHONPATH for MuseTalk imports
 WORKDIR /app
+ENV PYTHONPATH="${MUSETALK_DIR}:${PYTHONPATH}"
 
 # Copy application code
 COPY config.py /app/config.py
