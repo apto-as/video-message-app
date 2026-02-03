@@ -91,13 +91,11 @@ COPY models.py /app/models.py
 COPY lipsync_service.py /app/lipsync_service.py
 COPY main.py /app/main.py
 
-# Create storage directories
+# Create storage directories (these will be overridden by volume mounts)
 RUN mkdir -p ${STORAGE_DIR}/videos ${STORAGE_DIR}/uploads ${STORAGE_DIR}/temp ${MODELS_DIR}
 
-# Create non-root user for security
-RUN groupadd -r musetalk && useradd -r -g musetalk musetalk
-RUN chown -R musetalk:musetalk /app
-USER musetalk
+# Note: Running as root to handle mounted volume permissions
+# TODO: Add proper user mapping for production security
 
 # Expose port
 EXPOSE 8003
