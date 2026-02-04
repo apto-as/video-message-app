@@ -38,10 +38,12 @@ class MuseTalkInference:
 
         # Model components
         self.audio_processor = None
+        self.whisper = None  # WhisperModel for audio encoding
         self.vae = None
         self.unet = None
         self.pe = None
         self.timesteps = None
+        self.weight_dtype = None
         self.musetalk_loaded = False
         self.model_loaded = False
 
@@ -62,8 +64,17 @@ class MuseTalkInference:
                 self.unet.model = self.unet.model.to(self.device)
                 self.pe = self.pe.to(self.device)
 
-            # Set timesteps
+            # Set timesteps and weight dtype
             self.timesteps = torch.tensor([0], device=self.device)
+            self.weight_dtype = self.unet.model.dtype
+
+            # Load Whisper model for audio feature encoding
+            whisper_model_dir = str(Config.MODELS_DIR / "whisper")
+            from transformers import WhisperModel
+            self.whisper = WhisperModel.from_pretrained(whisper_model_dir)
+            self.whisper = self.whisper.to(device=self.device, dtype=self.weight_dtype).eval()
+            self.whisper.requires_grad_(False)
+            logger.info(f"Whisper model loaded from {whisper_model_dir}")
 
             self.model_loaded = True
             self.musetalk_loaded = True
@@ -247,18 +258,23 @@ class MuseTalkInference:
             if progress_callback:
                 progress_callback(0.2, "Processing audio")
 
-            # Process audio
-            whisper_feature = self.audio_processor.audio2feat(audio_path)
-            whisper_chunks = self.audio_processor.feature2chunks(
-                feature_array=whisper_feature,
-                fps=Config.OUTPUT_FPS
+            # Process audio features
+            whisper_input_features, librosa_length = self.audio_processor.get_audio_feature(audio_path)
+            if whisper_input_features is None:
+                raise ValueError(f"Could not read audio: {audio_path}")
+            whisper_chunks = self.audio_processor.get_whisper_chunk(
+                whisper_input_features,
+                self.device,
+                self.weight_dtype,
+                self.whisper,
+                librosa_length,
+                fps=Config.OUTPUT_FPS,
             )
 
             if progress_callback:
                 progress_callback(0.3, "Generating frames")
 
             # Prepare for blending
-            input_latent_list = []
             coord = coord_list[0]
             frame = frame_list[0]
 
@@ -267,64 +283,52 @@ class MuseTalkInference:
             crop_frame = frame[y1:y2, x1:x2]
             crop_frame = cv2.resize(crop_frame, (256, 256), interpolation=cv2.INTER_LANCZOS4)
 
-            # Prepare latent for each chunk
-            latent = self._get_latent(crop_frame)
-            input_latent_list = [latent] * len(whisper_chunks)
-
-            # Get masked frame for blending
-            input_img_list = [crop_frame] * len(whisper_chunks)
+            # Encode face crop to latent space using MuseTalk's VAE
+            latent = self.vae.get_latents_for_unet(crop_frame)
+            input_latent_list = [latent]
 
             if progress_callback:
                 progress_callback(0.4, "Running inference")
 
+            # Use MuseTalk's datagen for batched inference
+            from musetalk.utils.utils import datagen
+            batch_size = 8
+            video_num = len(whisper_chunks)
+            gen = datagen(
+                whisper_chunks=whisper_chunks,
+                vae_encode_latents=input_latent_list,
+                batch_size=batch_size,
+                delay_frame=0,
+                device=self.device,
+            )
+
             # Generate lip-sync frames
-            output_frames = []
-            batch_size = 8  # Smaller batch for VRAM efficiency
-
-            for i in range(0, len(whisper_chunks), batch_size):
+            res_frame_list = []
+            total_batches = int(np.ceil(float(video_num) / batch_size))
+            for batch_idx, (whisper_batch, latent_batch) in enumerate(gen):
                 if progress_callback:
-                    prog = 0.4 + (0.4 * i / len(whisper_chunks))
-                    progress_callback(prog, f"Generating frames {i}/{len(whisper_chunks)}")
+                    prog = 0.4 + (0.4 * batch_idx / max(total_batches, 1))
+                    progress_callback(prog, f"Generating batch {batch_idx}/{total_batches}")
 
-                batch_whisper = whisper_chunks[i:i + batch_size]
-                batch_latent = input_latent_list[i:i + batch_size]
-
-                # Prepare audio features
-                audio_feat_tensor = torch.stack(
-                    [torch.from_numpy(feat) for feat in batch_whisper],
-                    dim=0
-                ).to(self.device)
-
-                if self.device == "cuda":
-                    audio_feat_tensor = audio_feat_tensor.half()
-
-                # Stack latents
-                latent_tensor = torch.cat(batch_latent, dim=0)
-
-                # Get position encoding
                 with torch.no_grad():
-                    audio_feat_pe = self.pe(audio_feat_tensor)
+                    audio_feature_batch = self.pe(whisper_batch)
+                    latent_batch = latent_batch.to(dtype=self.unet.model.dtype)
 
-                    # UNet forward
-                    pred_latent = self.unet(
-                        latent_tensor,
-                        self.timesteps.expand(len(batch_latent)),
-                        encoder_hidden_states=audio_feat_pe
+                    pred_latents = self.unet.model(
+                        latent_batch,
+                        self.timesteps,
+                        encoder_hidden_states=audio_feature_batch
                     ).sample
 
-                    # Decode
-                    pred_frames = self.vae.decode(pred_latent / 0.18215).sample
-                    pred_frames = (pred_frames / 2 + 0.5).clamp(0, 1)
+                    recon = self.vae.decode_latents(pred_latents)
+                    for res_frame in recon:
+                        res_frame_list.append(res_frame)
 
-                # Convert to numpy frames
-                for j, pred_frame in enumerate(pred_frames):
-                    frame_np = pred_frame.permute(1, 2, 0).cpu().numpy()
-                    frame_np = (frame_np * 255).astype(np.uint8)
-                    frame_np = cv2.cvtColor(frame_np, cv2.COLOR_RGB2BGR)
-
-                    # Blend with original
-                    blended = self._blend_frame(frame, frame_np, coord)
-                    output_frames.append(blended)
+            # Blend generated faces back onto original frame
+            output_frames = []
+            for res_frame in res_frame_list:
+                blended = self._blend_frame(frame, res_frame, coord)
+                output_frames.append(blended)
 
             if progress_callback:
                 progress_callback(0.85, "Encoding video")
@@ -341,22 +345,6 @@ class MuseTalkInference:
         finally:
             # Cleanup temp directory
             shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def _get_latent(self, image: np.ndarray) -> torch.Tensor:
-        """Encode image to latent space"""
-        # Normalize to [-1, 1]
-        image_tensor = torch.from_numpy(image).float() / 255.0
-        image_tensor = (image_tensor * 2 - 1).permute(2, 0, 1).unsqueeze(0)
-        image_tensor = image_tensor.to(self.device)
-
-        if self.device == "cuda":
-            image_tensor = image_tensor.half()
-
-        with torch.no_grad():
-            latent = self.vae.encode(image_tensor).latent_dist.sample()
-            latent = latent * 0.18215
-
-        return latent
 
     def _blend_frame(
         self,
