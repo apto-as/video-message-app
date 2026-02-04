@@ -25,8 +25,8 @@ const VoiceVoxSelector = ({ onVoiceSelect, selectedVoice, showCloneOption = true
         case 'voicevox':
           endpoint = API_CONFIG.ENDPOINTS.VOICEVOX_SPEAKERS_POPULAR;
           break;
-        case 'openvoice':
-          endpoint = `${API_CONFIG.ENDPOINTS.UNIFIED_VOICE_LIST}?provider=openvoice`;
+        case 'voice-clone':
+          endpoint = `${API_CONFIG.ENDPOINTS.UNIFIED_VOICE_LIST}?provider=voice-clone`;
           break;
         default:
           endpoint = API_CONFIG.ENDPOINTS.UNIFIED_VOICE_LIST;
@@ -192,10 +192,10 @@ const VoiceVoxSelector = ({ onVoiceSelect, selectedVoice, showCloneOption = true
           {showCloneOption && (
             <>
               <button
-                className={`tab ${activeTab === 'openvoice' ? 'active' : ''}`}
-                onClick={() => setActiveTab('openvoice')}
+                className={`tab ${activeTab === 'voice-clone' ? 'active' : ''}`}
+                onClick={() => setActiveTab('voice-clone')}
               >
-                OpenVoice
+                Voice Clone
               </button>
             </>
           )}

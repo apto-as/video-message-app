@@ -1,5 +1,5 @@
 """
-レート制限ミドルウェア（D-ID API保護）
+レート制限ミドルウェア（リップシンクAPI保護）
 
 CRITICAL SECURITY RULES:
 1. ユーザーごとにレート制限を適用
@@ -25,22 +25,22 @@ class RateLimitConfig:
 
     # エンドポイント別のレート制限
     LIMITS = {
-        "/api/d-id/generate-video": {
+        "/api/lipsync/generate-video": {
             "requests_per_minute": 5,   # 1分間に5回
             "requests_per_hour": 30,    # 1時間に30回
             "burst_size": 2             # 瞬間的に許可する最大リクエスト数
         },
-        "/api/d-id/upload-source-image": {
+        "/api/lipsync/upload-source-image": {
             "requests_per_minute": 10,
             "requests_per_hour": 100,
             "burst_size": 3
         },
-        "/api/d-id/upload-audio": {
+        "/api/lipsync/upload-audio": {
             "requests_per_minute": 10,
             "requests_per_hour": 100,
             "burst_size": 3
         },
-        "/api/d-id/talk-status": {
+        "/api/lipsync/talk-status": {
             "requests_per_minute": 30,
             "requests_per_hour": 300,
             "burst_size": 10
@@ -289,8 +289,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """FastAPI用レート制限ミドルウェア"""
 
     async def dispatch(self, request: Request, call_next):
-        # D-ID APIエンドポイントのみチェック
-        if not request.url.path.startswith("/api/d-id/"):
+        # リップシンクAPIエンドポイントのみチェック
+        if not request.url.path.startswith("/api/lipsync/"):
             return await call_next(request)
 
         # ヘルスチェックは除外

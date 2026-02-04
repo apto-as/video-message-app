@@ -194,9 +194,9 @@ class ImageProcessor:
         
         return output_buffer.getvalue()
     
-    async def process_for_did(self, image_bytes: bytes, background_bytes: Optional[bytes] = None, enhance_quality: bool = True) -> bytes:
+    async def process_for_lipsync(self, image_bytes: bytes, background_bytes: Optional[bytes] = None, enhance_quality: bool = True) -> bytes:
         """
-        D-ID APIに送信するための画像処理パイプライン
+        リップシンク動画生成のための画像処理パイプライン
         
         Args:
             image_bytes: 入力画像のバイナリデータ

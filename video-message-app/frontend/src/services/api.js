@@ -4,7 +4,7 @@ import { API_CONFIG, getApiEndpoint } from '../config/api.config';
 // API設定を統一管理から取得
 const API_BASE_URL = API_CONFIG.API_URL;
 
-// VOICEVOX音声合成（2段階処理：音声生成→D-ID動画生成）
+// VOICEVOX音声合成（2段階処理：音声生成→リップシンク動画生成）
 export const generateVideoWithVoicevox = async (imageFile, text, voiceData = null, audioParams = {}) => {
   try {
     // Step 1: VOICEVOX音声合成
@@ -30,9 +30,9 @@ export const generateVideoWithVoicevox = async (imageFile, text, voiceData = nul
     const audioBlob = new Blob([voiceResponse.data], { type: 'audio/wav' });
     const audioUrl = URL.createObjectURL(audioBlob);
 
-    // Step 2: D-ID動画生成
-    const videoResult = await generateVideoWithDId(audioUrl, imageFile, {});
-    
+    // Step 2: リップシンク動画生成（MuseTalk経由）
+    const videoResult = await generateVideoWithLipsync(audioUrl, imageFile, {});
+
     return {
       success: true,
       video_url: videoResult.video_url,
@@ -50,8 +50,8 @@ export const generateVideoWithVoicevox = async (imageFile, text, voiceData = nul
   }
 };
 
-// OpenVoice V2音声合成（2段階処理：音声生成→D-ID動画生成）
-export const generateVideoWithOpenVoice = async (imageFile, text, voiceData = null, audioParams = {}) => {
+// Voice Clone音声合成（2段階処理：音声生成→リップシンク動画生成）
+export const generateVideoWithClonedVoice = async (imageFile, text, voiceData = null, audioParams = {}) => {
   try {
     // 【緊急修正】voice_profileオブジェクトとして送信
     const voiceRequest = {
@@ -59,7 +59,7 @@ export const generateVideoWithOpenVoice = async (imageFile, text, voiceData = nu
       voice_profile: voiceData ? {
         id: voiceData.id,
         name: voiceData.name || 'Unknown',
-        provider: 'openvoice'
+        provider: 'voice-clone'
       } : null,
       speed: audioParams.speed || 1.0,
       pitch: audioParams.pitch || 0.0,
@@ -75,7 +75,7 @@ export const generateVideoWithOpenVoice = async (imageFile, text, voiceData = nu
         'Content-Type': 'application/json',
       },
       responseType: 'blob',
-      timeout: 60000 // OpenVoiceは処理時間が長い
+      timeout: 180000 // Qwen TTS: first call may take 60+ seconds for model loading
     });
 
     // 音声BlobからURLを作成
@@ -84,9 +84,9 @@ export const generateVideoWithOpenVoice = async (imageFile, text, voiceData = nu
 
     // Audio synthesis successful
 
-    // Step 2: D-ID動画生成
-    const videoResult = await generateVideoWithDId(audioUrl, imageFile, {});
-    
+    // Step 2: リップシンク動画生成（MuseTalk経由）
+    const videoResult = await generateVideoWithLipsync(audioUrl, imageFile, {});
+
     return {
       success: true,
       video_url: videoResult.video_url,
@@ -100,13 +100,13 @@ export const generateVideoWithOpenVoice = async (imageFile, text, voiceData = nu
     } else if (error.request) {
       throw new Error('ネットワークエラー');
     } else {
-      throw new Error('OpenVoice動画生成に失敗しました');
+      throw new Error('Voice Clone動画生成に失敗しました');
     }
   }
 };
 
 // 音声クローン機能
-export const cloneVoice = async (audioFile, voiceName, provider = 'openvoice', language = 'ja') => {
+export const cloneVoice = async (audioFile, voiceName, provider = 'voice-clone', language = 'ja') => {
   const formData = new FormData();
   formData.append('audio_file', audioFile);
   formData.append('voice_name', voiceName);
@@ -250,62 +250,62 @@ export const testVoiceProfile = async (profileId, text = "こんにちは、音�
   }
 };
 
-// D-ID動画生成（リップシンク）
-export const generateVideoWithDId = async (audioUrl, imageFile = null, options = {}) => {
+// リップシンク動画生成（MuseTalk経由）
+export const generateVideoWithLipsync = async (audioUrl, imageFile = null, options = {}) => {
   try {
     // 画像ファイルが必須であることを確認
     if (!imageFile) {
       throw new Error('リップシンク動画生成には画像ファイルが必要です');
     }
-    
-    // 画像をD-IDにアップロード
+
+    // 画像をアップロード
     const imageFormData = new FormData();
     imageFormData.append('file', imageFile);
-    
-    const imageUploadResponse = await axios.post(`${API_BASE_URL}/d-id/upload-source-image`, imageFormData, {
+
+    const imageUploadResponse = await axios.post(`${API_BASE_URL}/lipsync/upload-source-image`, imageFormData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
       timeout: 30000,
     });
-    
+
     const sourceUrl = imageUploadResponse.data.url;
-    
-    // 音声がBlob URLの場合、実際のファイルに変換してD-IDにアップロード
+
+    // 音声がBlob URLの場合、実際のファイルに変換してアップロード
     let uploadedAudioUrl = audioUrl;
     if (audioUrl.startsWith('blob:')) {
       // Blob URLからBlobを取得
       const audioResponse = await fetch(audioUrl);
       const audioBlob = await audioResponse.blob();
-      
+
       // BlobをFileに変換
       const audioFile = new File([audioBlob], 'audio.wav', { type: audioBlob.type || 'audio/wav' });
-      
-      // 音声をD-IDにアップロード
+
+      // 音声をアップロード
       const audioFormData = new FormData();
       audioFormData.append('file', audioFile);
-      
-      const audioUploadResponse = await axios.post(`${API_BASE_URL}/d-id/upload-audio`, audioFormData, {
+
+      const audioUploadResponse = await axios.post(`${API_BASE_URL}/lipsync/upload-audio`, audioFormData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
         timeout: 30000,
       });
-      
+
       uploadedAudioUrl = audioUploadResponse.data.url;
     }
-    
-    // D-ID動画生成リクエスト（リップシンクのみ）
+
+    // リップシンク動画生成リクエスト（MuseTalk経由）
     const requestData = {
       audio_url: uploadedAudioUrl,
       source_url: sourceUrl
     };
-    
-    const response = await axios.post(`${API_BASE_URL}/d-id/generate-video`, requestData, {
+
+    const response = await axios.post(`${API_BASE_URL}/lipsync/generate-video`, requestData, {
       headers: {
         'Content-Type': 'application/json',
       },
-      timeout: 300000, // 5分タイムアウト（D-ID処理は時間がかかる）
+      timeout: 300000, // 5分タイムアウト（リップシンク処理は時間がかかる）
     });
 
     return {
@@ -315,18 +315,17 @@ export const generateVideoWithDId = async (audioUrl, imageFile = null, options =
       status: response.data.status
     };
   } catch (error) {
-    // Error handling for D-ID video generation
+    // Error handling for lipsync video generation
     if (error.response) {
       throw new Error(error.response.data.detail || 'サーバーエラー');
     } else if (error.request) {
       throw new Error('ネットワークエラー');
     } else {
-      throw new Error('D-ID動画生成に失敗しました');
+      throw new Error('リップシンク動画生成に失敗しました');
     }
   }
 };
 
-// D-IDプレゼンター機能は削除されました
 // リップシンク動画生成のみサポート
 
 // ===== Person Detection API =====

@@ -25,7 +25,7 @@
   background-color: #f8f9fa;
 }
 
-.openvoice-params {
+.clone-voice-params {
   margin: 20px 0;
   padding: 20px;
   border: 1px solid #28a745;
@@ -39,7 +39,7 @@
   font-size: 16px;
 }
 
-.openvoice-params h4 {
+.clone-voice-params h4 {
   margin: 0 0 15px 0;
   color: #28a745;
   font-size: 16px;

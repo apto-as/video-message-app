@@ -101,7 +101,7 @@ class VoiceManager:
             "content_type": file.content_type,
             "duration": audio_info.get("duration", 0),
             "sample_rate": audio_info.get("sample_rate", 0),
-            "did_voice_id": None,  # D-IDから返されるIDは後で設定
+            "external_voice_id": None,  # 外部サービスから返されるIDは後で設定
             "status": "uploaded"  # uploaded, processing, ready, error
         }
         

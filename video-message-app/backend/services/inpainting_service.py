@@ -316,6 +316,18 @@ class InpaintingService:
             - If no damage: original rembg_output unchanged
         """
         try:
+            # Ensure images have matching dimensions for damage detection
+            orig_img = Image.open(BytesIO(original_image))
+            rembg_img = Image.open(BytesIO(rembg_output))
+
+            if orig_img.size != rembg_img.size:
+                # Resize original to match rembg output (which may be cropped)
+                orig_resized = orig_img.convert('RGB').resize(rembg_img.size, Image.LANCZOS)
+                buf = BytesIO()
+                orig_resized.save(buf, format='PNG')
+                original_image = buf.getvalue()
+                logger.info(f"Resized original {orig_img.size} to match rembg output {rembg_img.size}")
+
             # Detect damage
             is_damaged, mask_bytes, stats = self.detect_clothing_damage(
                 original_image=original_image,

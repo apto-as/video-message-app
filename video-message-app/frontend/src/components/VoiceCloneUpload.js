@@ -78,7 +78,7 @@ const VoiceCloneUpload = ({ onUploadComplete, onProfileUpdate }) => {
   // テスト用音声生成（既存サンプル使用）
   const generateTestVoice = async () => {
     try {
-      const testText = 'こんにちは。これは既存サンプルを使用したテスト音声です。OpenVoiceの音声クローン機能が正常に動作しているかを確認しています。';
+      const testText = 'こんにちは。これは既存サンプルを使用したテスト音声です。音声クローン機能が正常に動作しているかを確認しています。';
       
       // 専用のAPIメソッドを使用
       const { generateTestVoice: apiGenerateTestVoice } = await import('../services/api');
@@ -580,7 +580,7 @@ const VoiceCloneUpload = ({ onUploadComplete, onProfileUpdate }) => {
           <div className="usage-info">
             <h4>💡 使用方法</h4>
             <p>
-              作成した音声プロファイルは、動画生成画面の音声選択で「OpenVoice V2」カテゴリに表示されます。
+              作成した音声プロファイルは、動画生成画面の音声選択で「Voice Clone」カテゴリに表示されます。
               テストボタンで音質を確認してから、動画生成にお使いください。
             </p>
           </div>

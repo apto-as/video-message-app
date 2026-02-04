@@ -1,3 +1,6 @@
+# DEPRECATED: D-ID cloud API code - to be removed
+# This validator was used for D-ID cloud API interactions.
+# The current system uses MuseTalk for local lip-sync video generation instead.
 """
 D-ID API セキュリティバリデーター
 

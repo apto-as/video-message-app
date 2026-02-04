@@ -5,7 +5,7 @@ from slowapi.errors import RateLimitExceeded
 import uvicorn
 import time
 import os
-from routers import voice, voicevox, unified_voice, voice_clone, background, d_id as lipsync, websocket, sse
+from routers import voice, voicevox, unified_voice, voice_clone, background, lipsync, websocket, sse
 from core.config import settings
 
 # Optional: Person Detection (Phase 2 feature - requires YOLO dependencies)
@@ -16,12 +16,8 @@ except ImportError:
     PERSON_DETECTION_AVAILABLE = False
     logger = None  # Will be set after logging is initialized
 
-# Optional: Video Generation (Phase 2 feature - requires torch for video pipeline)
-try:
-    from routers import video_generation
-    VIDEO_GENERATION_AVAILABLE = True
-except ImportError:
-    VIDEO_GENERATION_AVAILABLE = False
+# REMOVED: D-ID cloud video generation pipeline (replaced by MuseTalk lipsync)
+VIDEO_GENERATION_AVAILABLE = False
 from core.logging import setup_logging, get_logger, log_api_request, log_error, log_info
 from services.progress_tracker import progress_tracker
 from middleware.rate_limiter import limiter, rate_limit_exceeded_handler, check_redis_health
@@ -70,7 +66,7 @@ app.include_router(voicevox.router, prefix="/api", tags=["voicevox"])
 app.include_router(unified_voice.router, prefix="/api", tags=["unified_voice"])
 app.include_router(voice_clone.router, prefix="/api", tags=["voice_clone"])
 app.include_router(background.router, prefix="/api", tags=["background"])
-app.include_router(lipsync.router, prefix="/api/d-id", tags=["lipsync"])
+app.include_router(lipsync.router, prefix="/api/lipsync", tags=["lipsync"])
 
 # Optional: Person Detection (Phase 2 - 2025年12月)
 if PERSON_DETECTION_AVAILABLE:

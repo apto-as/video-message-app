@@ -1,6 +1,6 @@
 """
 音声クローン登録ルーター
-Qwen3-TTSを使用したカスタム音声の登録
+Qwen3-TTSを使用したカスタム音声の登録・管理
 """
 
 from fastapi import APIRouter, HTTPException, File, Form, UploadFile
@@ -102,7 +102,7 @@ async def register_voice_clone(
     language: str = Form(default="ja", description="言語コード"),
     audio_samples: List[UploadFile] = File(..., description="音声サンプル（最低3つ、各10-30秒推奨）")
 ):
-    """自分の声を登録してOpenVoice V2でクローン"""
+    """自分の声を登録してQwen3-TTSでクローン"""
     
     temp_files = []
     
@@ -118,7 +118,7 @@ async def register_voice_clone(
             )
         
         # プロファイルID生成
-        profile_id = f"openvoice_{uuid.uuid4().hex[:8]}"
+        profile_id = f"clone_{uuid.uuid4().hex[:8]}"
         
         logger.info(f"音声クローン登録開始: {name} (ID: {profile_id})")
         
@@ -269,7 +269,7 @@ async def register_voice_clone(
             # HTTPExceptionはそのまま再発生
             raise
         except Exception as e:
-            logger.error(f"OpenVoice処理エラー: {str(e)}")
+            logger.error(f"音声クローン処理エラー: {str(e)}")
             raise HTTPException(
                 status_code=500,
                 detail=f"音声クローン処理に失敗しました: {str(e)}"
@@ -386,13 +386,13 @@ async def get_voice_profiles():
         from services.voice_storage_service import VoiceStorageService
         storage_service = VoiceStorageService()
         # 現在のプロバイダーと互換性のあるプロファイルを取得
-        # qwen3-ttsとopenvoiceの両方のプロファイルを取得（後方互換性）
+        # qwen3-ttsプロファイルと旧openvoice_*プロファイルの両方を取得（後方互換性）
         current_provider = get_tts_provider_name()
         profiles = await storage_service.get_all_voice_profiles(provider=current_provider)
-        # openvoiceプロファイルも追加（qwen3-ttsでも使用可能）
+        # 旧openvoice_*プロファイルも追加（Qwen3-TTSでも使用可能）
         if current_provider == "qwen3-tts":
-            openvoice_profiles = await storage_service.get_all_voice_profiles(provider="openvoice")
-            profiles.extend(openvoice_profiles)
+            legacy_profiles = await storage_service.get_all_voice_profiles(provider="openvoice")
+            profiles.extend(legacy_profiles)
         
         return [
             VoiceProfile(**profile)

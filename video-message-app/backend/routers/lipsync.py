@@ -1,9 +1,10 @@
 """
-MuseTalk 動画生成 API ルーター
+リップシンク動画生成 API ルーター
 MuseTalkを使用したリップシンク動画生成
 """
 
 import os
+import hashlib
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
@@ -73,9 +74,24 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+async def _save_to_storage(data: bytes, filename: str, subdir: str = "uploads") -> str:
+    """Save file directly to shared storage volume and return storage URL."""
+    ext = Path(filename).suffix.lower() or '.bin'
+    content_hash = hashlib.sha256(data).hexdigest()[:16]
+    storage_filename = f"{content_hash}{ext}"
+
+    upload_dir = STORAGE_DIR / subdir
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    file_path = upload_dir / storage_filename
+    file_path.write_bytes(data)
+
+    return f"/storage/{subdir}/{storage_filename}"
+
 # リクエスト/レスポンスモデル
 class VideoGenerationRequest(BaseModel):
-    """動画生成リクエスト（リップシンクのみ）"""
+    """リップシンク動画生成リクエスト（MuseTalk）"""
     audio_url: str
     source_url: str  # リップシンクには必須
 
@@ -132,7 +148,7 @@ async def generate_video(request: VideoGenerationRequest):
         # Transform result_url to backend-served path
         result_url = None
         if result.get("result_url"):
-            result_url = f"/api/d-id/videos/{result['id']}"
+            result_url = f"/api/lipsync/videos/{result['id']}"
 
         return VideoGenerationResponse(
             id=result["id"],
@@ -159,6 +175,10 @@ async def get_talk_status(talk_id: str):
     Returns:
         動画生成の現在の状態
     """
+    # Sanitize talk_id to prevent injection
+    if not talk_id.replace("-", "").replace("_", "").isalnum():
+        raise HTTPException(status_code=400, detail="Invalid talk ID")
+
     try:
         musetalk = get_musetalk_client()
         if musetalk is None:
@@ -177,13 +197,13 @@ async def get_talk_status(talk_id: str):
 @router.post("/upload-source-image")
 async def upload_source_image(file: UploadFile = File(...)):
     """
-    ソース画像をMuseTalkにアップロード
+    ソース画像を共有ストレージに保存
 
     Args:
         file: アップロードする画像ファイル
 
     Returns:
-        アップロードされた画像のURL
+        保存された画像のストレージURL
     """
     try:
         if not file.content_type or not file.content_type.startswith('image/'):
@@ -191,15 +211,11 @@ async def upload_source_image(file: UploadFile = File(...)):
 
         image_data = await file.read()
 
-        musetalk = get_musetalk_client()
-        if musetalk is None:
-            raise HTTPException(status_code=503, detail="MuseTalkサービスが利用できません")
+        if len(image_data) > MAX_IMAGE_SIZE_BYTES:
+            raise HTTPException(status_code=400, detail=f"画像ファイルが大きすぎます（最大{MAX_IMAGE_SIZE_BYTES // (1024*1024)}MB）")
 
-        if not await musetalk.check_service_health():
-            raise HTTPException(status_code=503, detail="MuseTalkサービスが応答していません")
-
-        image_url = await musetalk.upload_image(image_data, file.filename)
-        logger.info(f"MuseTalk画像アップロード完了: {image_url}")
+        image_url = await _save_to_storage(image_data, file.filename or "image.png", subdir="uploads")
+        logger.info(f"画像保存完了: {image_url}")
         return {"url": image_url}
 
     except HTTPException:
@@ -211,13 +227,13 @@ async def upload_source_image(file: UploadFile = File(...)):
 @router.post("/upload-audio")
 async def upload_audio(file: UploadFile = File(...)):
     """
-    音声ファイルをMuseTalkにアップロード
+    音声ファイルを共有ストレージに保存
 
     Args:
         file: アップロードする音声ファイル
 
     Returns:
-        アップロードされた音声のURL
+        保存された音声のストレージURL
     """
     try:
         allowed_types = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/mp4', 'audio/flac', 'audio/m4a']
@@ -226,15 +242,11 @@ async def upload_audio(file: UploadFile = File(...)):
 
         audio_data = await file.read()
 
-        musetalk = get_musetalk_client()
-        if musetalk is None:
-            raise HTTPException(status_code=503, detail="MuseTalkサービスが利用できません")
+        if len(audio_data) > MAX_AUDIO_SIZE_BYTES:
+            raise HTTPException(status_code=400, detail=f"音声ファイルが大きすぎます（最大{MAX_AUDIO_SIZE_BYTES // (1024*1024)}MB）")
 
-        if not await musetalk.check_service_health():
-            raise HTTPException(status_code=503, detail="MuseTalkサービスが応答していません")
-
-        audio_url = await musetalk.upload_audio(audio_data, file.filename)
-        logger.info(f"MuseTalk音声アップロード完了: {audio_url}")
+        audio_url = await _save_to_storage(audio_data, file.filename or "audio.wav", subdir="uploads")
+        logger.info(f"音声保存完了: {audio_url}")
         return {"url": audio_url}
 
     except HTTPException:

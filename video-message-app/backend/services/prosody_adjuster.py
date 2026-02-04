@@ -86,7 +86,7 @@ class ProsodyAdjuster:
 
     def __init__(self):
         self.supported_formats = ['.wav', '.mp3', '.flac', '.m4a', '.ogg']
-        self.target_sample_rate = 24000  # D-ID推奨サンプルレート
+        self.target_sample_rate = 24000  # MuseTalk推奨サンプルレート
 
     def adjust_prosody(
         self,
