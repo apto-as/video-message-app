@@ -88,11 +88,11 @@ WORKDIR /app
 # Copy requirements
 COPY requirements.txt .
 
-# Install PyTorch with CUDA support
+# Install PyTorch with CUDA support (2.4.1 required for transformers >= 4.50)
 RUN if [ "$USE_CUDA" = "true" ]; then \
-        pip install --no-cache-dir torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118; \
+        pip install --no-cache-dir torch==2.4.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu118; \
     else \
-        pip install --no-cache-dir torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cpu; \
+        pip install --no-cache-dir torch==2.4.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cpu; \
     fi
 
 # Install Python dependencies
