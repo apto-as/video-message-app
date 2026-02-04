@@ -232,16 +232,13 @@ class MuseTalkInference:
             if progress_callback:
                 progress_callback(0.1, "Preprocessing image")
 
-            # Read and preprocess source image
+            # Read source image (keep original size for face detection)
             source_image = cv2.imread(image_path)
             if source_image is None:
                 raise ValueError(f"Could not read image: {image_path}")
 
-            # Resize to target resolution
-            source_image = cv2.resize(source_image, (Config.OUTPUT_RESOLUTION, Config.OUTPUT_RESOLUTION))
-
-            # Get face landmarks and bounding box
-            # Uses face_alignment (CPU) instead of mmpose (segfaults)
+            # Get face landmarks and bounding box on the original image
+            # (resizing before detection distorts aspect ratio and breaks face detection)
             coord_list, frame_list = get_landmark_and_bbox([source_image])
 
             if not coord_list or coord_list[0] == coord_placeholder:
