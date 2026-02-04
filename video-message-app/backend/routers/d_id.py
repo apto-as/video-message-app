@@ -3,12 +3,52 @@ MuseTalk 動画生成 API ルーター
 MuseTalkを使用したリップシンク動画生成
 """
 
+import os
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
 import logging
 
 from core.config import settings
+
+STORAGE_DIR = Path(os.environ.get("STORAGE_PATH", "/app/storage"))
+
+# File size limits for shared volume reads (prevent DoS via oversized files)
+MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024   # 10 MB
+MAX_AUDIO_SIZE_BYTES = 50 * 1024 * 1024   # 50 MB
+
+
+def _resolve_storage_path(storage_url: str, max_size_bytes: int = None) -> Path:
+    """Resolve a MuseTalk storage URL to a local filesystem path.
+
+    Both backend and MuseTalk share the Docker volume at /app/storage.
+    URLs like '/storage/uploads/hash.jpg' map to '/app/storage/uploads/hash.jpg'.
+    """
+    # Strip /storage/ prefix
+    relative = storage_url.removeprefix("/storage/")
+    if relative == storage_url:
+        # URL didn't start with /storage/, might be a full path
+        relative = storage_url.lstrip("/")
+
+    full_path = (STORAGE_DIR / relative).resolve()
+
+    # Prevent directory traversal
+    if not str(full_path).startswith(str(STORAGE_DIR.resolve())):
+        raise ValueError("Invalid storage path")
+
+    if not full_path.exists():
+        raise FileNotFoundError("File not found in storage")
+
+    # Check file size if limit specified
+    if max_size_bytes is not None:
+        file_size = full_path.stat().st_size
+        if file_size > max_size_bytes:
+            raise ValueError(f"File exceeds size limit ({file_size} > {max_size_bytes})")
+
+    return full_path
 
 # MuseTalk client (lazy loaded)
 _musetalk_client = None
@@ -66,17 +106,38 @@ async def generate_video(request: VideoGenerationRequest):
         if not await musetalk.check_service_health():
             raise HTTPException(status_code=503, detail="MuseTalkサービスが応答していません")
 
-        logger.info(f"MuseTalk動画生成開始: audio_url={request.audio_url}")
+        # Read uploaded files from shared Docker volume (with size limits)
+        try:
+            audio_path = _resolve_storage_path(request.audio_url, max_size_bytes=MAX_AUDIO_SIZE_BYTES)
+            image_path = _resolve_storage_path(request.source_url, max_size_bytes=MAX_IMAGE_SIZE_BYTES)
+        except (ValueError, FileNotFoundError) as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        audio_data = audio_path.read_bytes()
+        image_data = image_path.read_bytes()
+
+        logger.info(
+            f"MuseTalk動画生成開始: audio={audio_path.name} ({len(audio_data)} bytes), "
+            f"image={image_path.name} ({len(image_data)} bytes)"
+        )
+
         result = await musetalk.create_talk_video(
-            audio_url=request.audio_url,
-            source_url=request.source_url,
+            audio_data=audio_data,
+            image_data=image_data,
+            audio_filename=audio_path.name,
+            image_filename=image_path.name,
             wait_for_completion=True
         )
+
+        # Transform result_url to backend-served path
+        result_url = None
+        if result.get("result_url"):
+            result_url = f"/api/d-id/videos/{result['id']}"
 
         return VideoGenerationResponse(
             id=result["id"],
             status=result["status"],
-            result_url=result.get("result_url"),
+            result_url=result_url,
             created_at=result["created_at"]
         )
 
@@ -84,7 +145,7 @@ async def generate_video(request: VideoGenerationRequest):
         raise
     except Exception as e:
         logger.error(f"動画生成エラー: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"動画生成に失敗しました: {str(e)}")
+        raise HTTPException(status_code=500, detail="動画生成に失敗しました")
 
 
 @router.get("/talk-status/{talk_id}")
@@ -216,3 +277,21 @@ async def health_check():
         result["status"] = "degraded"
 
     return result
+
+
+@router.get("/videos/{job_id}")
+async def get_video(job_id: str):
+    """Serve generated video from shared storage volume."""
+    # Sanitize job_id to prevent path traversal
+    if not job_id.replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="Invalid job ID")
+
+    video_path = STORAGE_DIR / "videos" / f"{job_id}.mp4"
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    return FileResponse(
+        video_path,
+        media_type="video/mp4",
+        filename=f"{job_id}.mp4"
+    )

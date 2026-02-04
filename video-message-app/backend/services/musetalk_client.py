@@ -227,16 +227,30 @@ class MuseTalkClient:
 
     async def create_talk_video(
         self,
-        audio_url: str,
-        source_url: str,
+        audio_url: str = None,
+        source_url: str = None,
+        audio_data: bytes = None,
+        image_data: bytes = None,
+        audio_filename: str = "audio.wav",
+        image_filename: str = "source.jpg",
         wait_for_completion: bool = True
     ) -> Dict[str, Any]:
         """
         Create a lip-sync video from audio and source image.
 
+        Supports two modes:
+        1. File upload mode: Provide audio_data and image_data as bytes.
+           Files are sent as multipart uploads directly to MuseTalk.
+        2. URL mode (legacy): Provide audio_url and source_url as strings.
+           MuseTalk will attempt to download files from these URLs.
+
         Args:
-            audio_url: URL of the uploaded audio file
-            source_url: URL of the uploaded source image
+            audio_url: URL of the uploaded audio file (legacy mode)
+            source_url: URL of the uploaded source image (legacy mode)
+            audio_data: Raw audio bytes to upload directly
+            image_data: Raw image bytes to upload directly
+            audio_filename: Filename for the audio upload (used for content type detection)
+            image_filename: Filename for the image upload (used for content type detection)
             wait_for_completion: If True, wait for video generation to complete
 
         Returns:
@@ -251,17 +265,55 @@ class MuseTalkClient:
             Exception: If video generation fails
         """
         try:
-            logger.info(f'Creating talk video: audio={audio_url}, source={source_url}')
+            if audio_data is not None and image_data is not None:
+                # File upload mode: send binary data as multipart
+                logger.info(
+                    f'Creating talk video (file upload): '
+                    f'audio={audio_filename} ({len(audio_data)} bytes), '
+                    f'image={image_filename} ({len(image_data)} bytes)'
+                )
 
-            # Submit video generation request (MuseTalk expects Form data, not JSON)
-            response = await self.client.post(
-                f'{self.base_url}/generate-video',
-                data={
-                    'audio_url': audio_url,
-                    'source_url': source_url
-                },
-                timeout=self.DEFAULT_TIMEOUT
-            )
+                # Detect content types from filename extensions
+                audio_suffix = Path(audio_filename).suffix.lower()
+                audio_content_type_map = {
+                    '.wav': 'audio/wav',
+                    '.mp3': 'audio/mpeg',
+                    '.flac': 'audio/flac',
+                    '.m4a': 'audio/mp4',
+                }
+                audio_content_type = audio_content_type_map.get(audio_suffix, 'audio/wav')
+
+                image_suffix = Path(image_filename).suffix.lower()
+                image_content_type_map = {
+                    '.jpg': 'image/jpeg',
+                    '.jpeg': 'image/jpeg',
+                    '.png': 'image/png',
+                    '.webp': 'image/webp',
+                }
+                image_content_type = image_content_type_map.get(image_suffix, 'image/jpeg')
+
+                files = {
+                    'audio_data': (audio_filename, audio_data, audio_content_type),
+                    'source_image': (image_filename, image_data, image_content_type),
+                }
+
+                response = await self.client.post(
+                    f'{self.base_url}/generate-video',
+                    files=files,
+                    timeout=self.UPLOAD_TIMEOUT
+                )
+            else:
+                # URL mode (legacy): send URLs as form data
+                logger.info(f'Creating talk video (URL mode): audio={audio_url}, source={source_url}')
+
+                response = await self.client.post(
+                    f'{self.base_url}/generate-video',
+                    data={
+                        'audio_url': audio_url,
+                        'source_url': source_url
+                    },
+                    timeout=self.DEFAULT_TIMEOUT
+                )
 
             if response.status_code != 200:
                 error_detail = self._extract_error(response)
