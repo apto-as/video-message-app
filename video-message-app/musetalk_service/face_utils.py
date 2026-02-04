@@ -8,6 +8,7 @@ library provides equivalent 68-point face landmarks and face detection.
 This module replaces musetalk.utils.preprocessing for our use case.
 """
 import logging
+import threading
 from typing import List, Optional, Tuple
 
 import cv2
@@ -15,25 +16,29 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Singleton face alignment instance (lazy-initialized)
+# Singleton face alignment instance (lazy-initialized, thread-safe)
 _fa_instance = None
+_fa_lock = threading.Lock()
 
 # Placeholder for no-face-detected case (matches MuseTalk convention)
 coord_placeholder = (0.0, 0.0, 0.0, 0.0)
 
 
 def _get_face_alignment():
-    """Get or create the singleton FaceAlignment instance (CPU)."""
+    """Get or create the singleton FaceAlignment instance (CPU, thread-safe)."""
     global _fa_instance
-    if _fa_instance is None:
-        import face_alignment
-        logger.info("Initializing face_alignment (CPU)...")
-        _fa_instance = face_alignment.FaceAlignment(
-            face_alignment.LandmarksType.TWO_D,
-            flip_input=False,
-            device='cpu'
-        )
-        logger.info("face_alignment initialized")
+    if _fa_instance is not None:
+        return _fa_instance
+    with _fa_lock:
+        if _fa_instance is None:
+            import face_alignment
+            logger.info("Initializing face_alignment (CPU)...")
+            _fa_instance = face_alignment.FaceAlignment(
+                face_alignment.LandmarksType.TWO_D,
+                flip_input=False,
+                device='cpu'
+            )
+            logger.info("face_alignment initialized")
     return _fa_instance
 
 
@@ -103,18 +108,26 @@ def get_landmark_and_bbox(
         half_face_dist = np.max(landmarks[:, 1]) - half_face_coord[1]
         upper_bond = max(0, half_face_coord[1] - half_face_dist)
 
-        x1 = int(np.min(landmarks[:, 0]))
-        y1 = int(upper_bond)
-        x2 = int(np.max(landmarks[:, 0]))
-        y2 = int(np.max(landmarks[:, 1]))
+        h, w = frame.shape[:2]
+        x1 = max(0, int(np.min(landmarks[:, 0])))
+        y1 = max(0, int(upper_bond))
+        x2 = min(w, int(np.max(landmarks[:, 0])))
+        y2 = min(h, int(np.max(landmarks[:, 1])))
 
-        if y2 - y1 <= 0 or x2 - x1 <= 0 or x1 < 0:
+        if y2 - y1 <= 0 or x2 - x1 <= 0:
             # Invalid landmark bbox - use face detection bbox as fallback
             try:
                 det = fa.face_detector.detect_from_image(rgb_frame)
                 if det is not None and len(det) > 0:
                     d = det[0]
-                    coords_list.append((int(d[0]), int(d[1]), int(d[2]), int(d[3])))
+                    fx1 = max(0, int(d[0]))
+                    fy1 = max(0, int(d[1]))
+                    fx2 = min(w, int(d[2]))
+                    fy2 = min(h, int(d[3]))
+                    if fx2 - fx1 > 0 and fy2 - fy1 > 0:
+                        coords_list.append((fx1, fy1, fx2, fy2))
+                    else:
+                        coords_list.append(coord_placeholder)
                 else:
                     coords_list.append(coord_placeholder)
             except Exception:

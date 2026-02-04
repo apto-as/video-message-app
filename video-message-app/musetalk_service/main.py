@@ -46,14 +46,17 @@ if torch.cuda.is_available():
 
 import asyncio
 import hashlib
+import ipaddress
 import logging
 import os
 import shutil
+import socket
 import tempfile
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 import aiofiles
 import httpx
@@ -147,9 +150,43 @@ def get_file_hash(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()[:16]
 
 
+def _validate_url(url: str) -> str:
+    """Validate URL to prevent SSRF attacks.
+
+    Blocks private/internal IP ranges, link-local addresses (AWS metadata),
+    and non-HTTP schemes.
+
+    Raises:
+        ValueError: If URL is blocked
+    """
+    parsed = urlparse(url)
+
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Unsupported URL scheme: {parsed.scheme}")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("URL has no hostname")
+
+    # Resolve hostname to IP to prevent DNS rebinding
+    try:
+        resolved_ips = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except socket.gaierror:
+        raise ValueError(f"Cannot resolve hostname: {hostname}")
+
+    for family, _, _, _, sockaddr in resolved_ips:
+        ip = ipaddress.ip_address(sockaddr[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            raise ValueError(f"URL resolves to blocked address: {ip}")
+
+    return url
+
+
 async def download_file(url: str, target_path: Path) -> Path:
-    """Download file from URL"""
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    """Download file from URL (with SSRF protection)"""
+    _validate_url(url)
+
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
         response = await client.get(url)
         response.raise_for_status()
 
@@ -323,9 +360,12 @@ async def generate_video(
 
     except HTTPException:
         raise
+    except ValueError as e:
+        logger.warning(f"Invalid input for job: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to create job: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal error creating job")
 
 
 @app.get("/talk-status/{talk_id}", response_model=JobStatusResponse, tags=["Video Generation"])
@@ -388,8 +428,8 @@ async def upload_source_image(file: UploadFile = File(..., description="Source f
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Upload failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Image upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Upload failed")
 
 
 @app.post("/upload-audio", response_model=UploadResponse, tags=["Uploads"])
@@ -418,8 +458,8 @@ async def upload_audio(file: UploadFile = File(..., description="Audio file")):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Upload failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Audio upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Upload failed")
 
 
 @app.get("/videos/{video_id}", tags=["Videos"])

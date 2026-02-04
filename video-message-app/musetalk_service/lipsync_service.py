@@ -280,6 +280,12 @@ class MuseTalkInference:
 
             # Get crop coordinates (x1, y1, x2, y2 format from get_landmark_and_bbox)
             x1, y1, x2, y2 = coord
+            h, w = frame.shape[:2]
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(w, x2), min(h, y2)
+            if x2 - x1 <= 0 or y2 - y1 <= 0:
+                raise ValueError(f"Invalid face crop region: ({x1},{y1})-({x2},{y2}) in {w}x{h} image")
+            coord = (x1, y1, x2, y2)
             crop_frame = frame[y1:y2, x1:x2]
             crop_frame = cv2.resize(crop_frame, (256, 256), interpolation=cv2.INTER_LANCZOS4)
 
@@ -354,6 +360,12 @@ class MuseTalkInference:
     ) -> np.ndarray:
         """Blend generated face into original frame"""
         x1, y1, x2, y2 = coord
+        h, w = original.shape[:2]
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w, x2), min(h, y2)
+        if x2 - x1 <= 0 or y2 - y1 <= 0:
+            return original.copy()
+
         result = original.copy()
 
         # Resize generated to match crop size
@@ -497,7 +509,7 @@ class JobQueue:
                     logger.error(f"Job {job_id} failed: {e}")
                     import traceback
                     traceback.print_exc()
-                    job.fail(str(e))
+                    job.fail("Video generation failed")
 
                 finally:
                     self.queue.task_done()
