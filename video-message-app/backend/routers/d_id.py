@@ -1,18 +1,13 @@
 """
-D-ID / MuseTalk 動画生成 API ルーター
-USE_LOCAL_LIPSYNC=true の場合はMuseTalk、それ以外はD-ID APIを使用
+MuseTalk 動画生成 API ルーター
+MuseTalkを使用したリップシンク動画生成
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional
 import logging
-import os
-import aiofiles
-from pathlib import Path
-import httpx
-from services.d_id_client import d_id_client
+
 from core.config import settings
 
 # MuseTalk client (lazy loaded)
@@ -55,9 +50,7 @@ class VideoGenerationResponse(BaseModel):
 @router.post("/generate-video", response_model=VideoGenerationResponse)
 async def generate_video(request: VideoGenerationRequest):
     """
-    動画を生成（MuseTalkまたはD-ID APIを使用）
-
-    USE_LOCAL_LIPSYNC=true の場合はMuseTalk、それ以外はD-ID APIを使用
+    MuseTalkを使用して動画を生成
 
     Args:
         request: 動画生成リクエスト
@@ -66,37 +59,18 @@ async def generate_video(request: VideoGenerationRequest):
         生成された動画の情報
     """
     try:
-        # Check if local lip-sync (MuseTalk) should be used
-        if settings.should_use_local_lipsync:
-            musetalk = get_musetalk_client()
-            if musetalk is not None:
-                try:
-                    # Check MuseTalk service health
-                    if await musetalk.check_service_health():
-                        logger.info(f"MuseTalk動画生成開始: audio_url={request.audio_url}")
-                        result = await musetalk.create_talk_video(
-                            audio_url=request.audio_url,
-                            source_url=request.source_url,
-                            wait_for_completion=True
-                        )
-                        return VideoGenerationResponse(
-                            id=result["id"],
-                            status=result["status"],
-                            result_url=result.get("result_url"),
-                            created_at=result["created_at"]
-                        )
-                    else:
-                        logger.warning("MuseTalkサービスが利用不可、D-IDにフォールバック")
-                except Exception as e:
-                    logger.warning(f"MuseTalk処理エラー、D-IDにフォールバック: {e}")
-                    if not settings.should_fallback_to_cloud:
-                        raise HTTPException(status_code=503, detail=f"MuseTalkサービスエラー: {str(e)}")
+        musetalk = get_musetalk_client()
+        if musetalk is None:
+            raise HTTPException(status_code=503, detail="MuseTalkサービスが利用できません")
 
-        # Fallback to D-ID API
-        logger.info(f"D-ID動画生成開始: audio_url={request.audio_url}")
-        result = await d_id_client.create_talk_video(
+        if not await musetalk.check_service_health():
+            raise HTTPException(status_code=503, detail="MuseTalkサービスが応答していません")
+
+        logger.info(f"MuseTalk動画生成開始: audio_url={request.audio_url}")
+        result = await musetalk.create_talk_video(
             audio_url=request.audio_url,
-            source_url=request.source_url
+            source_url=request.source_url,
+            wait_for_completion=True
         )
 
         return VideoGenerationResponse(
@@ -119,26 +93,17 @@ async def get_talk_status(talk_id: str):
     動画生成ステータスを確認
 
     Args:
-        talk_id: トークID（MuseTalkまたはD-ID）
+        talk_id: MuseTalkジョブID
 
     Returns:
         動画生成の現在の状態
     """
     try:
-        # Check if local lip-sync (MuseTalk) should be used
-        if settings.should_use_local_lipsync:
-            musetalk = get_musetalk_client()
-            if musetalk is not None:
-                try:
-                    status = await musetalk.get_talk_status(talk_id)
-                    return status
-                except Exception as e:
-                    logger.warning(f"MuseTalkステータス取得エラー、D-IDを試行: {e}")
-                    if not settings.should_fallback_to_cloud:
-                        raise HTTPException(status_code=503, detail=f"MuseTalkサービスエラー: {str(e)}")
+        musetalk = get_musetalk_client()
+        if musetalk is None:
+            raise HTTPException(status_code=503, detail="MuseTalkサービスが利用できません")
 
-        # Fallback to D-ID API
-        status = await d_id_client.get_talk_status(talk_id)
+        status = await musetalk.get_talk_status(talk_id)
         return status
 
     except HTTPException:
@@ -151,9 +116,7 @@ async def get_talk_status(talk_id: str):
 @router.post("/upload-source-image")
 async def upload_source_image(file: UploadFile = File(...)):
     """
-    ソース画像をアップロード（MuseTalkまたはD-IDを使用）
-
-    USE_LOCAL_LIPSYNC=true の場合はMuseTalk、それ以外はD-IDにアップロード
+    ソース画像をMuseTalkにアップロード
 
     Args:
         file: アップロードする画像ファイル
@@ -162,34 +125,20 @@ async def upload_source_image(file: UploadFile = File(...)):
         アップロードされた画像のURL
     """
     try:
-        # ファイル形式の検証
         if not file.content_type or not file.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="画像ファイルをアップロードしてください")
 
-        # ファイルデータを読み取り
         image_data = await file.read()
 
-        # Check if local lip-sync (MuseTalk) should be used
-        if settings.should_use_local_lipsync:
-            musetalk = get_musetalk_client()
-            if musetalk is not None:
-                try:
-                    # Check MuseTalk service health
-                    if await musetalk.check_service_health():
-                        image_url = await musetalk.upload_image(image_data, file.filename)
-                        logger.info(f"MuseTalk画像アップロード完了: {image_url}")
-                        return {"url": image_url}
-                    else:
-                        logger.warning("MuseTalkサービスが利用不可、D-IDにフォールバック")
-                except Exception as e:
-                    logger.warning(f"MuseTalkアップロードエラー、D-IDにフォールバック: {e}")
-                    if not settings.should_fallback_to_cloud:
-                        raise HTTPException(status_code=503, detail=f"MuseTalkサービスエラー: {str(e)}")
+        musetalk = get_musetalk_client()
+        if musetalk is None:
+            raise HTTPException(status_code=503, detail="MuseTalkサービスが利用できません")
 
-        # Fallback to D-ID
-        image_url = await d_id_client.upload_image(image_data, file.filename)
-        logger.info(f"D-ID画像アップロード完了: {image_url}")
+        if not await musetalk.check_service_health():
+            raise HTTPException(status_code=503, detail="MuseTalkサービスが応答していません")
 
+        image_url = await musetalk.upload_image(image_data, file.filename)
+        logger.info(f"MuseTalk画像アップロード完了: {image_url}")
         return {"url": image_url}
 
     except HTTPException:
@@ -201,9 +150,7 @@ async def upload_source_image(file: UploadFile = File(...)):
 @router.post("/upload-audio")
 async def upload_audio(file: UploadFile = File(...)):
     """
-    音声ファイルをアップロード（MuseTalkまたはD-IDを使用）
-
-    USE_LOCAL_LIPSYNC=true の場合はMuseTalk、それ以外はD-IDにアップロード
+    音声ファイルをMuseTalkにアップロード
 
     Args:
         file: アップロードする音声ファイル
@@ -212,35 +159,21 @@ async def upload_audio(file: UploadFile = File(...)):
         アップロードされた音声のURL
     """
     try:
-        # ファイル形式の検証
         allowed_types = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/mp4', 'audio/flac', 'audio/m4a']
         if not file.content_type or file.content_type not in allowed_types:
             raise HTTPException(status_code=400, detail="音声ファイル（WAV, MP3, MP4, FLAC, M4A）をアップロードしてください")
 
-        # ファイルデータを読み取り
         audio_data = await file.read()
 
-        # Check if local lip-sync (MuseTalk) should be used
-        if settings.should_use_local_lipsync:
-            musetalk = get_musetalk_client()
-            if musetalk is not None:
-                try:
-                    # Check MuseTalk service health
-                    if await musetalk.check_service_health():
-                        audio_url = await musetalk.upload_audio(audio_data, file.filename)
-                        logger.info(f"MuseTalk音声アップロード完了: {audio_url}")
-                        return {"url": audio_url}
-                    else:
-                        logger.warning("MuseTalkサービスが利用不可、D-IDにフォールバック")
-                except Exception as e:
-                    logger.warning(f"MuseTalkアップロードエラー、D-IDにフォールバック: {e}")
-                    if not settings.should_fallback_to_cloud:
-                        raise HTTPException(status_code=503, detail=f"MuseTalkサービスエラー: {str(e)}")
+        musetalk = get_musetalk_client()
+        if musetalk is None:
+            raise HTTPException(status_code=503, detail="MuseTalkサービスが利用できません")
 
-        # Fallback to D-ID
-        audio_url = await d_id_client.upload_audio(audio_data, file.filename)
-        logger.info(f"D-ID音声アップロード完了: {audio_url}")
+        if not await musetalk.check_service_health():
+            raise HTTPException(status_code=503, detail="MuseTalkサービスが応答していません")
 
+        audio_url = await musetalk.upload_audio(audio_data, file.filename)
+        logger.info(f"MuseTalk音声アップロード完了: {audio_url}")
         return {"url": audio_url}
 
     except HTTPException:
@@ -252,48 +185,34 @@ async def upload_audio(file: UploadFile = File(...)):
 @router.get("/health")
 async def health_check():
     """
-    リップシンクサービスのヘルスチェック
-
-    USE_LOCAL_LIPSYNC=true の場合はMuseTalk、それ以外はD-IDのステータスを返す
+    MuseTalkリップシンクサービスのヘルスチェック
 
     Returns:
         サービスの状態
     """
     result = {
         "status": "healthy",
-        "use_local_lipsync": settings.should_use_local_lipsync,
-        "fallback_enabled": settings.should_fallback_to_cloud
+        "primary_service": "musetalk"
     }
 
-    # Check MuseTalk service if local lip-sync is enabled
-    if settings.should_use_local_lipsync:
-        musetalk = get_musetalk_client()
-        if musetalk is not None:
-            try:
-                musetalk_healthy = await musetalk.check_service_health()
-                result["musetalk"] = {
-                    "available": musetalk_healthy,
-                    "service_url": musetalk.base_url
-                }
-                if musetalk_healthy:
-                    result["primary_service"] = "musetalk"
-                else:
-                    result["primary_service"] = "d-id" if settings.should_fallback_to_cloud else "none"
-            except Exception as e:
-                result["musetalk"] = {
-                    "available": False,
-                    "error": str(e)
-                }
-                result["primary_service"] = "d-id" if settings.should_fallback_to_cloud else "none"
-        else:
-            result["musetalk"] = {"available": False, "error": "Client not initialized"}
-            result["primary_service"] = "d-id" if settings.should_fallback_to_cloud else "none"
+    musetalk = get_musetalk_client()
+    if musetalk is not None:
+        try:
+            musetalk_healthy = await musetalk.check_service_health()
+            result["musetalk"] = {
+                "available": musetalk_healthy,
+                "service_url": musetalk.base_url
+            }
+            if not musetalk_healthy:
+                result["status"] = "degraded"
+        except Exception as e:
+            result["musetalk"] = {
+                "available": False,
+                "error": str(e)
+            }
+            result["status"] = "degraded"
     else:
-        result["primary_service"] = "d-id"
-
-    # Always include D-ID status for fallback awareness
-    result["d_id"] = {
-        "api_key_configured": bool(d_id_client.api_key)
-    }
+        result["musetalk"] = {"available": False, "error": "Client not initialized"}
+        result["status"] = "degraded"
 
     return result

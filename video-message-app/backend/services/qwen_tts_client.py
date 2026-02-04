@@ -172,10 +172,12 @@ class Qwen3TTSClient:
 
             if response.status_code == 200:
                 result = response.json()
-                logger.info(f'Voice clone created: profile_id={result.get("profile_id")}')
+                # Field name is voice_profile_id (alias profile_id for backward compat)
+                profile_id_value = result.get('voice_profile_id') or result.get('profile_id')
+                logger.info(f'Voice clone created: profile_id={profile_id_value}')
                 return {
                     'success': True,
-                    'profile_id': result.get('profile_id'),
+                    'voice_profile_id': profile_id_value,
                     'message': result.get('message', 'Voice clone created successfully')
                 }
             else:
@@ -183,7 +185,7 @@ class Qwen3TTSClient:
                 try:
                     error_json = response.json()
                     error_detail = error_json.get('detail', error_detail)
-                except:
+                except (ValueError, KeyError):
                     pass
                 logger.error(f'Voice clone creation failed: {response.status_code} - {error_detail}')
                 return {
@@ -265,7 +267,7 @@ class Qwen3TTSClient:
                 try:
                     error_json = response.json()
                     error_detail = error_json.get('detail', error_detail)
-                except:
+                except (ValueError, KeyError):
                     pass
                 logger.error(f'Voice synthesis API error: {response.status_code} - {error_detail}')
                 raise Exception(f'Voice synthesis API error: {response.status_code}')

@@ -1,7 +1,6 @@
 """
 音声クローン登録ルーター
-Qwen3-TTS または OpenVoice V2を使用したカスタム音声の登録
-設定 (USE_LOCAL_TTS) に基づいてクライアントを自動選択
+Qwen3-TTSを使用したカスタム音声の登録
 """
 
 from fastapi import APIRouter, HTTPException, File, Form, UploadFile
@@ -26,25 +25,14 @@ logger = logging.getLogger(__name__)
 
 
 def get_tts_client():
-    """
-    設定に基づいて適切なTTSクライアントを取得する。
-
-    Returns:
-        Qwen3TTSClient or OpenVoiceHybridClient instance
-    """
-    if settings.should_use_local_tts:
-        from services.qwen_tts_client import Qwen3TTSClient
-        logger.info("Using Qwen3-TTS client for voice synthesis")
-        return Qwen3TTSClient()
-    else:
-        from services.openvoice_hybrid_client import OpenVoiceHybridClient
-        logger.info("Using OpenVoice client for voice synthesis")
-        return OpenVoiceHybridClient()
+    """Qwen3-TTSクライアントを取得する。"""
+    from services.qwen_tts_client import Qwen3TTSClient
+    return Qwen3TTSClient()
 
 
 def get_tts_provider_name() -> str:
     """現在のTTSプロバイダー名を取得"""
-    return "qwen3-tts" if settings.should_use_local_tts else "openvoice"
+    return "qwen3-tts"
 
 
 async def synthesize_with_client(
@@ -54,10 +42,10 @@ async def synthesize_with_client(
     language: str = "ja"
 ) -> bytes:
     """
-    TTSクライアントの違いを吸収して音声合成を実行する。
+    Qwen3-TTSクライアントで音声合成を実行する。
 
     Args:
-        client: TTSクライアント（Qwen3TTSClient or OpenVoiceHybridClient）
+        client: Qwen3TTSClient
         text: 合成するテキスト
         voice_profile: 音声プロファイル情報
         language: 言語コード
@@ -65,46 +53,32 @@ async def synthesize_with_client(
     Returns:
         bytes: WAV音声データ
     """
-    if settings.should_use_local_tts:
-        # Qwen3TTSClient uses profile_id directly
-        profile_id = voice_profile.get('id')
-        if not profile_id:
-            raise ValueError("Voice profile ID is required for Qwen3-TTS")
-        return await client.synthesize_with_clone(
-            text=text,
-            profile_id=profile_id,
-            language=language
-        )
-    else:
-        # OpenVoiceHybridClient uses full profile dict
-        return await client.synthesize_with_clone(
-            text=text,
-            voice_profile=voice_profile,
-            language=language
-        )
+    profile_id = voice_profile.get('id')
+    if not profile_id:
+        raise ValueError("Voice profile ID is required")
+    return await client.synthesize_with_clone(
+        text=text,
+        profile_id=profile_id,
+        language=language
+    )
 
 
 async def check_client_availability(client: Any) -> Dict[str, Any]:
     """
-    TTSクライアントの可用性を確認する。
+    Qwen3-TTSクライアントの可用性を確認する。
 
     Args:
-        client: TTSクライアント
+        client: Qwen3TTSClient
 
     Returns:
         dict: 可用性情報
     """
-    if settings.should_use_local_tts:
-        # Qwen3TTSClient uses check_service_health
-        is_healthy = await client.check_service_health()
-        return {
-            'provider': 'qwen3-tts',
-            'available': is_healthy,
-            'native_service': is_healthy
-        }
-    else:
-        # OpenVoiceHybridClient uses check_service_availability
-        return await client.check_service_availability()
+    is_healthy = await client.check_service_health()
+    return {
+        'provider': 'qwen3-tts',
+        'available': is_healthy,
+        'native_service': is_healthy
+    }
 
 class VoiceCloneResponse(BaseModel):
     success: bool

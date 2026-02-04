@@ -153,6 +153,10 @@ class Qwen3TTSService:
                 return
 
             logger.info("Unloading model to free VRAM...")
+            # Mark as unloaded first to prevent use during cleanup
+            self._status.loaded = False
+            self._status.vram_usage_mb = None
+
             try:
                 del self.model
                 self.model = None
@@ -163,13 +167,13 @@ class Qwen3TTSService:
                     torch.cuda.synchronize()
 
                 gc.collect()
-
-                self._status.loaded = False
-                self._status.vram_usage_mb = None
                 logger.info("Model unloaded successfully")
 
             except Exception as e:
-                logger.error(f"Error unloading model: {e}")
+                logger.error(f"Error during model cleanup: {e}")
+                # Model reference is already cleared, ensure state is consistent
+                self.model = None
+                self._prompt_cache.clear()
 
     async def get_health_status(self) -> dict:
         """Get service health status"""

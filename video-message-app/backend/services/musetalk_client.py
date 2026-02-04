@@ -414,7 +414,7 @@ class MuseTalkClient:
             if 'message' in error_json:
                 return str(error_json['message'])
             return str(error_json)
-        except:
+        except (ValueError, KeyError):
             return response.text or f'HTTP {response.status_code}'
 
 

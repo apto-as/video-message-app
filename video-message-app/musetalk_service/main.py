@@ -36,11 +36,11 @@ if torch.cuda.is_available():
         _preloaded_audio_processor = AudioProcessor(feature_extractor_path=whisper_model_dir)
         print(f"Pre-loaded AudioProcessor from {whisper_model_dir}")
     except Exception as e:
-        print(f"Warning: Failed to pre-load models: {e}")
+        print(f"FATAL: Failed to pre-load models on CUDA: {e}")
         import traceback
         traceback.print_exc()
-        _preloaded_models = None
-        _preloaded_audio_processor = None
+        print("Exiting: CUDA model pre-loading is required to avoid segfault during async operations")
+        sys.exit(1)
 
 import asyncio
 import hashlib

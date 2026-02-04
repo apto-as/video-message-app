@@ -49,15 +49,12 @@ class VoiceProfile(BaseModel):
 
 
 class VoiceCloneResponse(BaseModel):
-    """Voice clone response - compatible with OpenVoice API"""
+    """Voice clone response"""
     success: bool = Field(..., description="Success flag")
-    voice_profile_id: Optional[str] = Field(None, alias="profile_id", description="Created profile ID")
+    voice_profile_id: Optional[str] = Field(None, description="Created profile ID")
     embedding_path: Optional[str] = Field(None, description="Embedding file path")
     message: str = Field(..., description="Response message")
     error: Optional[str] = Field(None, description="Error message if failed")
-
-    class Config:
-        populate_by_name = True
 
 
 class VoiceSynthesisResponse(BaseModel):
