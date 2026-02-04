@@ -20,6 +20,17 @@ import torch
 from config import Config
 from models import JobData, JobStatus
 
+# MuseTalk imports - these MUST be available at module level
+# They are pre-imported in main.py before uvicorn starts to avoid CUDA/asyncio segfault
+# If running without pre-import (non-CUDA), they'll be imported on first use
+try:
+    from musetalk.utils.utils import get_file_type, datagen
+    from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder
+    from musetalk.utils.blending import get_image_prepare_material, get_image_blending
+    _MUSETALK_MODULES_LOADED = True
+except ImportError:
+    _MUSETALK_MODULES_LOADED = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -218,11 +229,8 @@ class MuseTalkInference:
         progress_callback=None
     ) -> str:
         """Synchronous video generation"""
-        self._add_musetalk_to_path()
-
-        from musetalk.utils.utils import get_file_type, datagen
-        from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder
-        from musetalk.utils.blending import get_image_prepare_material, get_image_blending
+        # MuseTalk modules are pre-imported at module level (see top of file)
+        # DO NOT import them here - importing in thread pool causes CUDA segfault
 
         temp_dir = Path(tempfile.mkdtemp(dir=Config.TEMP_DIR))
         try:

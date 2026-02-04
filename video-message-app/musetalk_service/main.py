@@ -25,6 +25,13 @@ if torch.cuda.is_available():
     try:
         from musetalk.utils.utils import load_all_model
         from musetalk.utils.audio_processor import AudioProcessor
+        # CRITICAL: Pre-import ALL modules that _generate_video_sync uses
+        # These imports trigger dlib/mmpose/CUDA library loading - must happen
+        # in the main thread BEFORE uvicorn starts, not in thread pool
+        from musetalk.utils.utils import get_file_type, datagen  # noqa: F401
+        from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder  # noqa: F401
+        from musetalk.utils.blending import get_image_prepare_material, get_image_blending  # noqa: F401
+        print("Pre-imported all MuseTalk inference modules (preprocessing, blending)")
 
         # Load main models
         _preloaded_models = load_all_model(device="cuda")
