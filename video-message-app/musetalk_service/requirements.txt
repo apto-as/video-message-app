@@ -1,0 +1,54 @@
+# MuseTalk Lip-Sync Service Dependencies
+
+# Web framework
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+python-multipart==0.0.9
+
+# Async utilities
+aiofiles==23.2.1
+httpx==0.27.0
+
+# Data validation
+pydantic==2.6.1
+
+# Deep learning
+torch==2.1.2
+torchvision==0.16.2
+torchaudio==2.1.2
+
+# Image processing
+opencv-python-headless==4.9.0.80
+Pillow==10.2.0
+
+# Audio processing
+librosa==0.10.1
+soundfile==0.12.1
+
+# Scientific computing
+numpy==1.26.4
+scipy==1.12.0
+
+# MuseTalk specific dependencies
+omegaconf==2.3.0
+diffusers==0.25.1
+transformers==4.37.2
+accelerate==0.26.1
+safetensors==0.4.2
+huggingface-hub>=0.19.3,<1.0  # Required by transformers 4.37.x (not compatible with >=1.0)
+
+# Face detection and processing
+face-alignment==1.4.1
+# dlib is built from source in Dockerfile (requires CUDA build from git)
+mediapipe==0.10.9
+
+# Whisper for audio feature extraction
+openai-whisper==20231117
+
+# Video processing
+imageio==2.34.0
+imageio-ffmpeg==0.4.9
+
+# Utilities
+tqdm==4.66.2
+einops==0.7.0

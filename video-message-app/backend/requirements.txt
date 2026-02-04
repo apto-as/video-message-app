@@ -47,3 +47,7 @@ scipy>=1.7.0; sys_platform == "darwin"
 # torch==2.0.0+cu118 (installed via Dockerfile)
 # torchvision==0.15.1+cu118 (installed via Dockerfile)
 ultralytics==8.0.196
+
+# LaMa Inpainting for clothing repair (Phase 1.5)
+# Repairs white/light clothing damaged by rembg background removal
+simple-lama-inpainting>=0.1.0

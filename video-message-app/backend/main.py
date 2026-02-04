@@ -5,7 +5,7 @@ from slowapi.errors import RateLimitExceeded
 import uvicorn
 import time
 import os
-from routers import voice, voicevox, unified_voice, voice_clone, background, d_id, websocket, sse
+from routers import voice, voicevox, unified_voice, voice_clone, background, d_id as lipsync, websocket, sse
 from core.config import settings
 
 # Optional: Person Detection (Phase 2 feature - requires YOLO dependencies)
@@ -70,7 +70,7 @@ app.include_router(voicevox.router, prefix="/api", tags=["voicevox"])
 app.include_router(unified_voice.router, prefix="/api", tags=["unified_voice"])
 app.include_router(voice_clone.router, prefix="/api", tags=["voice_clone"])
 app.include_router(background.router, prefix="/api", tags=["background"])
-app.include_router(d_id.router, prefix="/api/d-id", tags=["d-id"])
+app.include_router(lipsync.router, prefix="/api/d-id", tags=["lipsync"])
 
 # Optional: Person Detection (Phase 2 - 2025年12月)
 if PERSON_DETECTION_AVAILABLE:
