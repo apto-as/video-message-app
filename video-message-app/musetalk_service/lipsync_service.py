@@ -20,16 +20,10 @@ import torch
 from config import Config
 from models import JobData, JobStatus
 
-# MuseTalk imports - these MUST be available at module level
-# They are pre-imported in main.py before uvicorn starts to avoid CUDA/asyncio segfault
-# If running without pre-import (non-CUDA), they'll be imported on first use
-try:
-    from musetalk.utils.utils import get_file_type, datagen
-    from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder
-    from musetalk.utils.blending import get_image_prepare_material, get_image_blending
-    _MUSETALK_MODULES_LOADED = True
-except ImportError:
-    _MUSETALK_MODULES_LOADED = False
+# Face detection uses face_utils (face_alignment/dlib) instead of
+# musetalk.utils.preprocessing (mmpose) because mmcv CUDA extensions
+# segfault in this container.
+from face_utils import get_landmark_and_bbox, coord_placeholder
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +100,6 @@ class MuseTalkInference:
 
                 # Import MuseTalk modules
                 from musetalk.utils.utils import load_all_model
-                from musetalk.utils.preprocessing import get_landmark_and_bbox
                 from musetalk.utils.audio_processor import AudioProcessor
 
                 # Load models - load_all_model returns (vae, unet, pe)
@@ -248,10 +241,10 @@ class MuseTalkInference:
             source_image = cv2.resize(source_image, (Config.OUTPUT_RESOLUTION, Config.OUTPUT_RESOLUTION))
 
             # Get face landmarks and bounding box
-            # Note: preprocessing models run on CPU (forced during import to avoid CUDA conflict)
+            # Uses face_alignment (CPU) instead of mmpose (segfaults)
             coord_list, frame_list = get_landmark_and_bbox([source_image])
 
-            if not coord_list or coord_list[0] is None:
+            if not coord_list or coord_list[0] == coord_placeholder:
                 raise ValueError("No face detected in source image")
 
             if progress_callback:
@@ -272,8 +265,8 @@ class MuseTalkInference:
             coord = coord_list[0]
             frame = frame_list[0]
 
-            # Get crop coordinates
-            y1, y2, x1, x2 = coord
+            # Get crop coordinates (x1, y1, x2, y2 format from get_landmark_and_bbox)
+            x1, y1, x2, y2 = coord
             crop_frame = frame[y1:y2, x1:x2]
             crop_frame = cv2.resize(crop_frame, (256, 256), interpolation=cv2.INTER_LANCZOS4)
 
@@ -375,7 +368,7 @@ class MuseTalkInference:
         coord: Tuple[int, int, int, int]
     ) -> np.ndarray:
         """Blend generated face into original frame"""
-        y1, y2, x1, x2 = coord
+        x1, y1, x2, y2 = coord
         result = original.copy()
 
         # Resize generated to match crop size

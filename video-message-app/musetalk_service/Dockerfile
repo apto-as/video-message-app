@@ -105,6 +105,7 @@ RUN rm -rf ${MUSETALK_DIR}/models && ln -s ${MODELS_DIR} ${MUSETALK_DIR}/models
 # Copy application code
 COPY config.py /app/config.py
 COPY models.py /app/models.py
+COPY face_utils.py /app/face_utils.py
 COPY lipsync_service.py /app/lipsync_service.py
 COPY main.py /app/main.py
 
@@ -117,7 +118,7 @@ RUN mkdir -p ${STORAGE_DIR}/videos ${STORAGE_DIR}/uploads ${STORAGE_DIR}/temp ${
 # Expose port
 EXPOSE 8003
 
-# Health check (start-period=180s: Phase 1 loads preprocessing on CPU, Phase 2 loads GPU models)
+# Health check (start-period=180s: GPU model loading takes time on cold start)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
     CMD curl -f http://localhost:8003/health || exit 1
 

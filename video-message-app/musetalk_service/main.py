@@ -3,18 +3,12 @@ MuseTalk Lip-Sync Service - FastAPI Application
 
 A D-ID API compatible service for lip-sync video generation using MuseTalk v1.5
 """
-# CRITICAL: All imports and model loading happen BEFORE uvicorn starts
-# to avoid segfault caused by CUDA/asyncio interaction in thread pools.
+# CRITICAL: Load GPU models BEFORE uvicorn starts to avoid CUDA/asyncio segfault.
 #
-# Two-phase initialization:
-# Phase 1: Import preprocessing/blending modules with CUDA DISABLED
-#   - preprocessing.py initializes mmpose and face_alignment at module level
-#   - These CUDA inits conflict with PyTorch's CUDA context, causing segfault
-#   - Force CPU for these models (face detection/landmarks are lightweight)
-#   - Must set CWD to MuseTalk dir (preprocessing uses relative paths)
-#
-# Phase 2: Initialize PyTorch CUDA and load GPU models (VAE, UNet, PE)
-#   - These are the heavy inference models that need GPU
+# NOTE: We do NOT import musetalk.utils.preprocessing because it depends on mmpose,
+# and mmpose's mmcv CUDA extensions segfault in this container (mmcv was built without
+# the compiled _ext module due to missing nvcc in the runtime Docker image).
+# Instead, face_utils.py provides get_landmark_and_bbox using face_alignment (dlib).
 import torch
 import sys
 import os
@@ -24,35 +18,11 @@ musetalk_dir = os.getenv("MUSETALK_DIR", "/app/MuseTalk")
 if musetalk_dir not in sys.path:
     sys.path.insert(0, musetalk_dir)
 
-# ---- Phase 1: Pre-import preprocessing modules with CUDA DISABLED ----
-# preprocessing.py initializes mmpose (init_model) and face_alignment (FaceAlignment)
-# at module level with device=cuda. This conflicts with PyTorch CUDA and causes segfault.
-# Force CPU for these models - face detection/landmark extraction are lightweight on CPU.
-_saved_cwd = os.getcwd()
-os.chdir(musetalk_dir)  # Required: preprocessing.py uses relative paths like ./musetalk/utils/dwpose/
-
-_real_cuda_available = torch.cuda.is_available
-torch.cuda.is_available = lambda: False  # Force CPU for preprocessing model init
-
-try:
-    from musetalk.utils.utils import get_file_type, datagen  # noqa: F401
-    from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder  # noqa: F401
-    from musetalk.utils.blending import get_image_prepare_material, get_image_blending  # noqa: F401
-    print("Phase 1: Pre-imported preprocessing modules (mmpose/face_alignment on CPU)")
-except Exception as e:
-    print(f"FATAL: Failed to pre-import preprocessing modules: {e}")
-    import traceback
-    traceback.print_exc()
-    sys.exit(1)
-finally:
-    torch.cuda.is_available = _real_cuda_available  # Restore CUDA availability
-    os.chdir(_saved_cwd)  # Restore working directory
-
-# ---- Phase 2: Load GPU models (VAE, UNet, PE, AudioProcessor) ----
+# Pre-load GPU models (VAE, UNet, PE, AudioProcessor)
 _preloaded_models = None
 _preloaded_audio_processor = None
 if torch.cuda.is_available():
-    print("Phase 2: Loading GPU models (VAE, UNet, PE, AudioProcessor)...")
+    print("Pre-loading MuseTalk GPU models (VAE, UNet, PE, AudioProcessor)...")
     torch.cuda.init()
     try:
         from musetalk.utils.utils import load_all_model
