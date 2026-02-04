@@ -248,7 +248,8 @@ class MuseTalkInference:
             source_image = cv2.resize(source_image, (Config.OUTPUT_RESOLUTION, Config.OUTPUT_RESOLUTION))
 
             # Get face landmarks and bounding box
-            coord_list, frame_list = get_landmark_and_bbox([source_image], self.device)
+            # Note: preprocessing models run on CPU (forced during import to avoid CUDA conflict)
+            coord_list, frame_list = get_landmark_and_bbox([source_image])
 
             if not coord_list or coord_list[0] is None:
                 raise ValueError("No face detected in source image")

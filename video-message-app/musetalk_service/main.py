@@ -3,9 +3,18 @@ MuseTalk Lip-Sync Service - FastAPI Application
 
 A D-ID API compatible service for lip-sync video generation using MuseTalk v1.5
 """
-# CRITICAL: Initialize CUDA and load models BEFORE uvicorn starts
-# PyTorch CUDA + MuseTalk models must be loaded before uvicorn's event loop
-# to avoid segfault caused by CUDA/asyncio interaction
+# CRITICAL: All imports and model loading happen BEFORE uvicorn starts
+# to avoid segfault caused by CUDA/asyncio interaction in thread pools.
+#
+# Two-phase initialization:
+# Phase 1: Import preprocessing/blending modules with CUDA DISABLED
+#   - preprocessing.py initializes mmpose and face_alignment at module level
+#   - These CUDA inits conflict with PyTorch's CUDA context, causing segfault
+#   - Force CPU for these models (face detection/landmarks are lightweight)
+#   - Must set CWD to MuseTalk dir (preprocessing uses relative paths)
+#
+# Phase 2: Initialize PyTorch CUDA and load GPU models (VAE, UNet, PE)
+#   - These are the heavy inference models that need GPU
 import torch
 import sys
 import os
@@ -15,25 +24,41 @@ musetalk_dir = os.getenv("MUSETALK_DIR", "/app/MuseTalk")
 if musetalk_dir not in sys.path:
     sys.path.insert(0, musetalk_dir)
 
-# Pre-load ALL models synchronously BEFORE any async imports
-# This includes vae, unet, pe, AND AudioProcessor to avoid CUDA/asyncio segfault
+# ---- Phase 1: Pre-import preprocessing modules with CUDA DISABLED ----
+# preprocessing.py initializes mmpose (init_model) and face_alignment (FaceAlignment)
+# at module level with device=cuda. This conflicts with PyTorch CUDA and causes segfault.
+# Force CPU for these models - face detection/landmark extraction are lightweight on CPU.
+_saved_cwd = os.getcwd()
+os.chdir(musetalk_dir)  # Required: preprocessing.py uses relative paths like ./musetalk/utils/dwpose/
+
+_real_cuda_available = torch.cuda.is_available
+torch.cuda.is_available = lambda: False  # Force CPU for preprocessing model init
+
+try:
+    from musetalk.utils.utils import get_file_type, datagen  # noqa: F401
+    from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder  # noqa: F401
+    from musetalk.utils.blending import get_image_prepare_material, get_image_blending  # noqa: F401
+    print("Phase 1: Pre-imported preprocessing modules (mmpose/face_alignment on CPU)")
+except Exception as e:
+    print(f"FATAL: Failed to pre-import preprocessing modules: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+finally:
+    torch.cuda.is_available = _real_cuda_available  # Restore CUDA availability
+    os.chdir(_saved_cwd)  # Restore working directory
+
+# ---- Phase 2: Load GPU models (VAE, UNet, PE, AudioProcessor) ----
 _preloaded_models = None
 _preloaded_audio_processor = None
 if torch.cuda.is_available():
-    print("Pre-loading MuseTalk models to avoid CUDA/asyncio segfault...")
+    print("Phase 2: Loading GPU models (VAE, UNet, PE, AudioProcessor)...")
     torch.cuda.init()
     try:
         from musetalk.utils.utils import load_all_model
         from musetalk.utils.audio_processor import AudioProcessor
-        # CRITICAL: Pre-import ALL modules that _generate_video_sync uses
-        # These imports trigger dlib/mmpose/CUDA library loading - must happen
-        # in the main thread BEFORE uvicorn starts, not in thread pool
-        from musetalk.utils.utils import get_file_type, datagen  # noqa: F401
-        from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder  # noqa: F401
-        from musetalk.utils.blending import get_image_prepare_material, get_image_blending  # noqa: F401
-        print("Pre-imported all MuseTalk inference modules (preprocessing, blending)")
 
-        # Load main models
+        # Load main models onto GPU
         _preloaded_models = load_all_model(device="cuda")
         print(f"Pre-loaded models: {type(_preloaded_models)}, count: {len(_preloaded_models)}")
 
@@ -43,10 +68,10 @@ if torch.cuda.is_available():
         _preloaded_audio_processor = AudioProcessor(feature_extractor_path=whisper_model_dir)
         print(f"Pre-loaded AudioProcessor from {whisper_model_dir}")
     except Exception as e:
-        print(f"FATAL: Failed to pre-load models on CUDA: {e}")
+        print(f"FATAL: Failed to pre-load GPU models: {e}")
         import traceback
         traceback.print_exc()
-        print("Exiting: CUDA model pre-loading is required to avoid segfault during async operations")
+        print("Exiting: GPU model loading is required for inference")
         sys.exit(1)
 
 import asyncio
