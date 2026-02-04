@@ -15,10 +15,8 @@ pydantic-settings>=2.1.0
 # torch>=2.0.0
 # torchaudio>=2.0.0
 
-# HuggingFace Transformers
-transformers>=4.36.0
-accelerate>=0.25.0
-safetensors>=0.4.0
+# Qwen3-TTS (includes transformers, accelerate, safetensors)
+qwen-tts
 
 # Audio Processing
 scipy>=1.11.0

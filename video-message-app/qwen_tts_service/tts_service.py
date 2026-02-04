@@ -1,6 +1,6 @@
 """
 Qwen3-TTS Service Wrapper
-Handles model loading, voice cloning, and synthesis
+Uses the official qwen-tts package for model loading and inference
 """
 
 import asyncio
@@ -19,8 +19,7 @@ from typing import Optional, List, Tuple, Dict, Any
 
 import numpy as np
 import torch
-import torchaudio
-from scipy.io import wavfile
+import soundfile as sf
 
 from config import config
 from models import (
@@ -33,42 +32,53 @@ from models import (
 
 logger = logging.getLogger(__name__)
 
+# Language code mapping: internal code -> Qwen3-TTS language name
+LANGUAGE_MAP = {
+    "ja": "Japanese",
+    "en": "English",
+    "zh": "Chinese",
+    "ko": "Korean",
+    "de": "German",
+    "fr": "French",
+    "ru": "Russian",
+    "pt": "Portuguese",
+    "es": "Spanish",
+    "it": "Italian",
+}
+
 
 class Qwen3TTSService:
-    """Qwen3-TTS Service with lazy model loading and VRAM management"""
+    """Qwen3-TTS Service using official qwen-tts package"""
 
     def __init__(self):
         self.model = None
-        self.processor = None
-        self.tokenizer = None
         self._model_lock = asyncio.Lock()
         self._status = ModelStatus()
         self._last_synthesis_time: Optional[float] = None
         self._unload_task: Optional[asyncio.Task] = None
+        # Cache for voice clone prompts (profile_id -> prompt_items)
+        self._prompt_cache: Dict[str, Any] = {}
 
     async def initialize(self) -> bool:
         """Initialize the service (does not load model if lazy_load is True)"""
         logger.info(f"Initializing Qwen3-TTS Service on device: {config.device}")
 
-        # Verify storage directories
         config.voice_profiles_dir.mkdir(parents=True, exist_ok=True)
         config.temp_dir.mkdir(parents=True, exist_ok=True)
 
         if not config.lazy_load:
-            # Load model immediately
             return await self._load_model()
 
         logger.info("Lazy loading enabled - model will be loaded on first use")
         return True
 
     async def _load_model(self) -> bool:
-        """Load the Qwen3-TTS model"""
+        """Load the Qwen3-TTS model using official qwen-tts package"""
         async with self._model_lock:
             if self._status.loaded:
                 return True
 
             if self._status.loading:
-                # Wait for loading to complete
                 while self._status.loading:
                     await asyncio.sleep(0.1)
                 return self._status.loaded
@@ -79,48 +89,19 @@ class Qwen3TTSService:
                 logger.info(f"Loading Qwen3-TTS model: {config.model_name}")
                 start_time = time.time()
 
-                # Set HuggingFace cache directory
                 os.environ["HF_HOME"] = str(config.hf_cache_dir)
                 os.environ["TRANSFORMERS_CACHE"] = str(config.hf_cache_dir)
 
-                # Import transformers here to avoid startup delay
-                from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
+                from qwen_tts import Qwen3TTSModel
 
-                # Load tokenizer
-                logger.info("Loading tokenizer...")
-                self.tokenizer = AutoTokenizer.from_pretrained(
-                    config.model_name,
-                    trust_remote_code=True,
-                    cache_dir=config.hf_cache_dir,
-                )
-
-                # Load processor (for audio)
-                logger.info("Loading processor...")
-                try:
-                    self.processor = AutoProcessor.from_pretrained(
-                        config.model_name,
-                        trust_remote_code=True,
-                        cache_dir=config.hf_cache_dir,
-                    )
-                except Exception as e:
-                    logger.warning(f"Processor not available: {e}, using tokenizer only")
-                    self.processor = None
-
-                # Load model
-                logger.info("Loading model...")
+                # Tesla T4 does not support bfloat16, use float16
                 dtype = torch.float16 if config.device == "cuda" else torch.float32
-                self.model = AutoModelForCausalLM.from_pretrained(
+
+                self.model = Qwen3TTSModel.from_pretrained(
                     config.model_name,
-                    trust_remote_code=True,
-                    torch_dtype=dtype,
-                    device_map="auto" if config.device == "cuda" else None,
-                    cache_dir=config.hf_cache_dir,
+                    device_map=f"{config.device}:0" if config.device == "cuda" else config.device,
+                    dtype=dtype,
                 )
-
-                if config.device != "cuda":
-                    self.model = self.model.to(config.device)
-
-                self.model.eval()
 
                 # Log VRAM usage
                 if config.device == "cuda":
@@ -137,7 +118,7 @@ class Qwen3TTSService:
                 return True
 
             except Exception as e:
-                logger.error(f"Failed to load model: {e}")
+                logger.error(f"Failed to load model: {e}", exc_info=True)
                 self._status.loading = False
                 self._status.loaded = False
                 return False
@@ -147,13 +128,11 @@ class Qwen3TTSService:
         if not self._status.loaded:
             return await self._load_model()
 
-        # Update last used time and cancel unload task
         self._status.last_used = datetime.now()
         if self._unload_task:
             self._unload_task.cancel()
             self._unload_task = None
 
-        # Schedule unload if configured
         if config.unload_after_idle > 0:
             self._unload_task = asyncio.create_task(self._schedule_unload())
 
@@ -176,11 +155,8 @@ class Qwen3TTSService:
             logger.info("Unloading model to free VRAM...")
             try:
                 del self.model
-                del self.processor
-                del self.tokenizer
                 self.model = None
-                self.processor = None
-                self.tokenizer = None
+                self._prompt_cache.clear()
 
                 if config.device == "cuda":
                     torch.cuda.empty_cache()
@@ -229,7 +205,6 @@ class Qwen3TTSService:
     ) -> VoiceCloneResponse:
         """Create a voice clone profile from audio samples"""
         try:
-            # Generate profile ID if not provided
             if not profile_id:
                 profile_id = f"qwen3tts_{uuid.uuid4().hex[:8]}"
 
@@ -238,19 +213,18 @@ class Qwen3TTSService:
 
             logger.info(f"Creating voice clone profile: {profile_id} with {len(audio_files)} samples")
 
-            # Process and combine audio samples
-            combined_audio = await self._process_reference_audio(audio_files)
+            # Save the best reference audio
+            reference_path = config.get_reference_audio_path(profile_id)
+            best_audio, best_sr = self._select_best_reference(audio_files)
 
-            if combined_audio is None:
+            if best_audio is None:
                 return VoiceCloneResponse(
                     success=False,
                     message="Failed to process audio samples",
                     error="Audio processing failed - ensure samples are at least 3 seconds each"
                 )
 
-            # Save reference audio
-            reference_path = config.get_reference_audio_path(profile_id)
-            wavfile.write(str(reference_path), config.sample_rate, combined_audio)
+            sf.write(str(reference_path), best_audio, best_sr)
 
             # Create profile metadata
             profile = VoiceProfile(
@@ -265,10 +239,12 @@ class Qwen3TTSService:
                 engine="qwen3-tts",
             )
 
-            # Save profile metadata
             metadata_path = config.get_profile_metadata_path(profile_id)
             with open(metadata_path, 'w', encoding='utf-8') as f:
                 json.dump(profile.model_dump(mode='json'), f, ensure_ascii=False, indent=2, default=str)
+
+            # Invalidate prompt cache for this profile
+            self._prompt_cache.pop(profile_id, None)
 
             logger.info(f"Voice clone profile created: {profile_id}")
 
@@ -286,60 +262,42 @@ class Qwen3TTSService:
                 error=str(e)
             )
 
-    async def _process_reference_audio(self, audio_files: List[bytes]) -> Optional[np.ndarray]:
-        """Process and combine reference audio files"""
-        try:
-            combined_samples = []
+    def _select_best_reference(self, audio_files: List[bytes]) -> Tuple[Optional[np.ndarray], int]:
+        """Select the best reference audio from the provided samples"""
+        import torchaudio
 
-            for i, audio_data in enumerate(audio_files):
-                try:
-                    # Load audio using torchaudio
-                    audio_tensor, sr = torchaudio.load(BytesIO(audio_data))
+        best_audio = None
+        best_sr = config.sample_rate
+        best_duration = 0.0
 
-                    # Convert to mono if stereo
-                    if audio_tensor.shape[0] > 1:
-                        audio_tensor = audio_tensor.mean(dim=0, keepdim=True)
+        for i, audio_data in enumerate(audio_files):
+            try:
+                audio_tensor, sr = torchaudio.load(BytesIO(audio_data))
 
-                    # Resample to target sample rate
-                    if sr != config.sample_rate:
-                        resampler = torchaudio.transforms.Resample(sr, config.sample_rate)
-                        audio_tensor = resampler(audio_tensor)
+                # Convert to mono
+                if audio_tensor.shape[0] > 1:
+                    audio_tensor = audio_tensor.mean(dim=0, keepdim=True)
 
-                    # Convert to numpy
-                    audio_np = audio_tensor.squeeze().numpy()
+                audio_np = audio_tensor.squeeze().numpy()
+                duration = len(audio_np) / sr
 
-                    # Check minimum length
-                    duration = len(audio_np) / config.sample_rate
-                    if duration < config.min_audio_length:
-                        logger.warning(f"Audio sample {i} is too short ({duration:.1f}s < {config.min_audio_length}s)")
-                        continue
-
-                    combined_samples.append(audio_np)
-                    logger.info(f"Processed audio sample {i}: {duration:.1f}s")
-
-                except Exception as e:
-                    logger.warning(f"Failed to process audio sample {i}: {e}")
+                if duration < config.min_audio_length:
+                    logger.warning(f"Audio sample {i} too short ({duration:.1f}s)")
                     continue
 
-            if not combined_samples:
-                return None
+                # Keep the longest sample as reference
+                if duration > best_duration:
+                    best_audio = audio_np
+                    best_sr = sr
+                    best_duration = duration
 
-            # Use the longest sample as reference (Qwen3-TTS works best with longer references)
-            reference_audio = max(combined_samples, key=len)
+                logger.info(f"Processed audio sample {i}: {duration:.1f}s")
 
-            # Normalize audio
-            max_val = np.max(np.abs(reference_audio))
-            if max_val > 0:
-                reference_audio = reference_audio / max_val * 0.9
+            except Exception as e:
+                logger.warning(f"Failed to process audio sample {i}: {e}")
+                continue
 
-            # Convert to int16
-            reference_audio = (reference_audio * 32767).astype(np.int16)
-
-            return reference_audio
-
-        except Exception as e:
-            logger.error(f"Error processing reference audio: {e}")
-            return None
+        return best_audio, best_sr
 
     async def synthesize_voice(
         self,
@@ -351,9 +309,8 @@ class Qwen3TTSService:
         volume: float = 1.0,
         pause_duration: float = 0.0,
     ) -> VoiceSynthesisResponse:
-        """Synthesize speech using Qwen3-TTS with voice cloning"""
+        """Synthesize speech using Qwen3-TTS voice cloning"""
         try:
-            # Ensure model is loaded
             if not await self._ensure_model_loaded():
                 return VoiceSynthesisResponse(
                     success=False,
@@ -370,7 +327,6 @@ class Qwen3TTSService:
                     error=f"Voice profile '{voice_profile_id}' not found"
                 )
 
-            # Load reference audio
             reference_audio_path = Path(profile.reference_audio_path) if profile.reference_audio_path else None
             if not reference_audio_path or not reference_audio_path.exists():
                 return VoiceSynthesisResponse(
@@ -382,12 +338,12 @@ class Qwen3TTSService:
             logger.info(f"Synthesizing: '{text[:50]}...' with profile {voice_profile_id}")
 
             # Perform synthesis
-            audio_data, duration = await self._synthesize(
+            audio_data, sample_rate, duration = await self._synthesize(
                 text=text,
                 reference_audio_path=reference_audio_path,
+                profile_id=voice_profile_id,
                 language=language,
                 speed=speed,
-                pitch=pitch,
             )
 
             if audio_data is None:
@@ -399,17 +355,17 @@ class Qwen3TTSService:
 
             # Apply volume adjustment
             if volume != 1.0:
-                audio_data = self._apply_volume(audio_data, volume)
+                audio_data = (audio_data * volume).clip(-1.0, 1.0)
 
-            # Add pause at the end if requested
+            # Add pause at the end
             if pause_duration > 0:
-                audio_data = self._add_pause(audio_data, pause_duration)
+                silence_samples = int(pause_duration * sample_rate)
+                audio_data = np.concatenate([audio_data, np.zeros(silence_samples, dtype=audio_data.dtype)])
                 duration += pause_duration
 
-            # Encode to base64
-            audio_base64 = self._encode_audio(audio_data)
+            # Encode to base64 WAV
+            audio_base64 = self._encode_audio(audio_data, sample_rate)
 
-            # Clear VRAM after synthesis
             if config.device == "cuda":
                 torch.cuda.empty_cache()
 
@@ -421,7 +377,7 @@ class Qwen3TTSService:
             )
 
         except Exception as e:
-            logger.error(f"Synthesis error: {e}")
+            logger.error(f"Synthesis error: {e}", exc_info=True)
             return VoiceSynthesisResponse(
                 success=False,
                 message="Synthesis failed",
@@ -432,163 +388,58 @@ class Qwen3TTSService:
         self,
         text: str,
         reference_audio_path: Path,
+        profile_id: str,
         language: str,
         speed: float,
-        pitch: float,
-    ) -> Tuple[Optional[np.ndarray], float]:
-        """Perform actual TTS synthesis using Qwen3-TTS"""
+    ) -> Tuple[Optional[np.ndarray], int, float]:
+        """Perform TTS synthesis using Qwen3-TTS generate_voice_clone"""
         try:
-            # Load reference audio
-            ref_audio, ref_sr = torchaudio.load(str(reference_audio_path))
-            if ref_sr != config.sample_rate:
-                resampler = torchaudio.transforms.Resample(ref_sr, config.sample_rate)
-                ref_audio = resampler(ref_audio)
+            qwen_language = LANGUAGE_MAP.get(language, "Japanese")
 
-            # Prepare input for Qwen3-TTS
-            # Note: The actual Qwen3-TTS API may differ - this is a placeholder
-            # implementation based on typical transformer TTS patterns
+            # Use cached voice clone prompt if available, otherwise create one
+            # x_vector_only_mode=True avoids needing ref_text
+            if profile_id not in self._prompt_cache:
+                logger.info(f"Creating voice clone prompt for profile {profile_id}")
+                prompt_items = self.model.create_voice_clone_prompt(
+                    ref_audio=str(reference_audio_path),
+                    x_vector_only_mode=True,
+                )
+                self._prompt_cache[profile_id] = prompt_items
+            else:
+                prompt_items = self._prompt_cache[profile_id]
+                logger.info(f"Using cached voice clone prompt for profile {profile_id}")
 
+            # Generate speech with voice cloning
             with torch.no_grad():
-                # Create prompt with reference audio context
-                # Qwen3-TTS uses a specific prompt format for voice cloning
-                prompt = self._create_tts_prompt(text, language)
-
-                # Tokenize
-                inputs = self.tokenizer(
-                    prompt,
-                    return_tensors="pt",
-                    padding=True,
-                    truncation=True,
-                    max_length=4096,
+                wavs, sr = self.model.generate_voice_clone(
+                    text=text,
+                    language=qwen_language,
+                    voice_clone_prompt=prompt_items,
                 )
 
-                # Move to device
-                inputs = {k: v.to(config.device) for k, v in inputs.items()}
+            audio_np = wavs[0]  # First (and only) output
+            duration = len(audio_np) / sr
 
-                # Reference audio processing (if processor available)
-                if self.processor is not None:
-                    ref_features = self.processor(
-                        ref_audio.squeeze().numpy(),
-                        sampling_rate=config.sample_rate,
-                        return_tensors="pt",
-                    )
-                    ref_features = {k: v.to(config.device) for k, v in ref_features.items()}
-                    inputs.update(ref_features)
+            # Apply speed adjustment via resampling
+            if speed != 1.0:
+                import scipy.signal as signal
+                new_length = int(len(audio_np) / speed)
+                audio_np = signal.resample(audio_np, new_length).astype(audio_np.dtype)
+                duration = len(audio_np) / sr
 
-                # Generate
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=8192,
-                    do_sample=True,
-                    temperature=0.7,
-                    top_p=0.95,
-                    repetition_penalty=1.1,
-                )
-
-                # Decode audio from model output
-                # Note: Actual decoding depends on Qwen3-TTS architecture
-                audio_output = self._decode_audio_output(outputs, speed, pitch)
-
-                if audio_output is None:
-                    # Fallback: return modified reference audio (placeholder)
-                    logger.warning("Using fallback audio generation")
-                    audio_output = ref_audio.squeeze().numpy()
-
-                duration = len(audio_output) / config.sample_rate
-                return audio_output, duration
+            logger.info(f"Synthesis complete: {duration:.1f}s at {sr}Hz")
+            return audio_np, sr, duration
 
         except Exception as e:
-            logger.error(f"Synthesis error: {e}")
-            return None, 0.0
+            logger.error(f"Synthesis error: {e}", exc_info=True)
+            return None, 0, 0.0
 
-    def _create_tts_prompt(self, text: str, language: str) -> str:
-        """Create TTS prompt for Qwen3-TTS"""
-        # Language-specific prompts
-        lang_prompts = {
-            "ja": "Generate natural Japanese speech for the following text:",
-            "en": "Generate natural English speech for the following text:",
-            "zh": "Generate natural Chinese speech for the following text:",
-            "ko": "Generate natural Korean speech for the following text:",
-        }
-
-        prompt_prefix = lang_prompts.get(language, lang_prompts["en"])
-        return f"{prompt_prefix}\n\n{text}"
-
-    def _decode_audio_output(
-        self,
-        outputs: torch.Tensor,
-        speed: float,
-        pitch: float,
-    ) -> Optional[np.ndarray]:
-        """Decode model output to audio waveform"""
-        try:
-            # This is a placeholder - actual implementation depends on Qwen3-TTS
-            # The model may output tokens that need vocoder decoding
-            # or direct waveform output
-
-            # Check if model has audio head/vocoder
-            if hasattr(self.model, 'audio_head') or hasattr(self.model, 'vocoder'):
-                # Direct audio output
-                with torch.no_grad():
-                    if hasattr(self.model, 'audio_head'):
-                        audio = self.model.audio_head(outputs)
-                    else:
-                        audio = self.model.vocoder(outputs)
-
-                    audio_np = audio.cpu().squeeze().numpy()
-
-                    # Apply speed adjustment
-                    if speed != 1.0:
-                        audio_np = self._apply_speed(audio_np, speed)
-
-                    return audio_np
-
-            # Token-based output - need external vocoder
-            logger.warning("Model output is token-based, vocoder required")
-            return None
-
-        except Exception as e:
-            logger.error(f"Error decoding audio output: {e}")
-            return None
-
-    def _apply_speed(self, audio: np.ndarray, speed: float) -> np.ndarray:
-        """Apply speed adjustment to audio"""
-        try:
-            import scipy.signal as signal
-
-            # Calculate new length
-            new_length = int(len(audio) / speed)
-
-            # Resample
-            resampled = signal.resample(audio, new_length)
-
-            return resampled.astype(audio.dtype)
-
-        except Exception as e:
-            logger.warning(f"Speed adjustment failed: {e}")
-            return audio
-
-    def _apply_volume(self, audio: np.ndarray, volume: float) -> np.ndarray:
-        """Apply volume adjustment to audio"""
-        return (audio * volume).clip(-32768, 32767).astype(np.int16)
-
-    def _add_pause(self, audio: np.ndarray, duration: float) -> np.ndarray:
-        """Add silence at the end of audio"""
-        silence_samples = int(duration * config.sample_rate)
-        silence = np.zeros(silence_samples, dtype=audio.dtype)
-        return np.concatenate([audio, silence])
-
-    def _encode_audio(self, audio: np.ndarray) -> str:
+    def _encode_audio(self, audio: np.ndarray, sample_rate: int) -> str:
         """Encode audio to base64 WAV"""
-        try:
-            buffer = BytesIO()
-            wavfile.write(buffer, config.sample_rate, audio)
-            buffer.seek(0)
-            return base64.b64encode(buffer.read()).decode('utf-8')
-
-        except Exception as e:
-            logger.error(f"Error encoding audio: {e}")
-            raise
+        buffer = BytesIO()
+        sf.write(buffer, audio, sample_rate, format='WAV')
+        buffer.seek(0)
+        return base64.b64encode(buffer.read()).decode('utf-8')
 
     async def _load_profile(self, profile_id: str) -> Optional[VoiceProfile]:
         """Load voice profile from storage"""
@@ -635,6 +486,7 @@ class Qwen3TTSService:
                 return False
 
             shutil.rmtree(profile_dir)
+            self._prompt_cache.pop(profile_id, None)
             logger.info(f"Deleted profile: {profile_id}")
             return True
 
