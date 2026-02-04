@@ -78,6 +78,7 @@ class EnvironmentConfig:
         # API設定
         self.did_api_key = os.environ.get('DID_API_KEY')
         self.voicevox_base_url = os.environ.get('VOICEVOX_BASE_URL', 'http://voicevox:50021' if self.is_docker else 'http://localhost:50021')
+        # DEPRECATED: OpenVoice service has been replaced by Qwen3-TTS
         self.openvoice_api_url = os.environ.get('OPENVOICE_API_URL', 'http://host.docker.internal:8001' if self.is_docker else 'http://localhost:8001')
         
         # デバッグ設定
@@ -114,7 +115,8 @@ class EnvironmentConfig:
         """音声サービスURLの取得"""
         return {
             "voicevox": self.voicevox_base_url,
-            "openvoice": self.openvoice_api_url
+            # DEPRECATED: OpenVoice service replaced by Qwen3-TTS
+            "openvoice": self.openvoice_api_url,
         }
     
     def get_debug_info(self) -> Dict[str, Any]:
@@ -136,7 +138,7 @@ class EnvironmentConfig:
             "storage_path_set": bool(self.storage_root_path),
             "did_api_key_set": bool(self.did_api_key),
             "voicevox_url_set": bool(self.voicevox_base_url),
-            "openvoice_url_set": bool(self.openvoice_api_url),
+            "openvoice_url_set": bool(self.openvoice_api_url),  # DEPRECATED
             "config_file_exists": bool(self.config_file)
         }
         

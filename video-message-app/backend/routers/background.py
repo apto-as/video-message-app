@@ -143,7 +143,7 @@ async def process_image(
             # SECURITY: Timeout enforcement
             with ProcessingTimeoutManager(timeout_seconds=30) as timeout:
                 # ImageProcessorを使用した実際の処理
-                processed_image_bytes = await processor.process_for_did(
+                processed_image_bytes = await processor.process_for_lipsync(
                     image_bytes=image_content,
                     background_bytes=background_content,
                     enhance_quality=enhance_quality

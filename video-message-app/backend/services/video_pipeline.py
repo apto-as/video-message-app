@@ -1,3 +1,6 @@
+# DEPRECATED: D-ID cloud API code - to be removed
+# This pipeline uses DIdClient for cloud-based video generation.
+# The current system uses MuseTalk for local lip-sync video generation instead.
 """
 Complete Video Generation Pipeline Service
 Integrates YOLO Person Detection -> BiRefNet Background Removal -> D-ID Video Generation

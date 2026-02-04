@@ -159,7 +159,7 @@ class SecureErrorHandler:
         外部APIエラーのハンドリング
 
         Args:
-            service_name: サービス名（例: "OpenVoice", "D-ID"）
+            service_name: サービス名（例: "Qwen3-TTS", "MuseTalk"）
             e: 発生した例外
             status_code: APIのステータスコード
 

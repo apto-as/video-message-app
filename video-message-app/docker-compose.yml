@@ -10,38 +10,7 @@ services:
       - voice_network
     restart: unless-stopped
 
-  # OpenVoice service - DISABLED (replaced by qwen-tts for local inference)
-  # To re-enable: remove profiles: [disabled] line
-  openvoice:
-    build:
-      context: ./openvoice_native
-      args:
-        USE_CUDA: ${USE_CUDA:-false}
-        DEVICE: ${DEVICE:-cpu}
-    container_name: openvoice_native
-    runtime: nvidia  # NVIDIA Container Runtime for GPU access
-    ports:
-      - "8001:8001"
-    volumes:
-      - ./data/backend/storage:/app/storage
-      - ./openvoice_native/data/openvoice:/app/data/openvoice:ro
-      - openvoice-tmp:/tmp  # 一時ファイル用の名前付きボリューム
-    tmpfs:
-      - /tmp/gradio:size=512M,mode=1777  # Gradio専用tmpfs（512MB制限、スティッキービット）
-      - /tmp/tmpfiles_me:size=2G,mode=1777  # Whisper一時ファイル用tmpfs（2GB制限、スティッキービット）
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - DEVICE=${DEVICE:-cpu}
-      - STORAGE_PATH=/app/storage
-      - OPENVOICE_BASE_DIR=/app
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    networks:
-      - voice_network
-    restart: unless-stopped
-    profiles:
-      - disabled  # Service disabled - use qwen-tts instead
-
-  # Qwen3 TTS Service - Local inference replacement for OpenVoice
+  # Qwen3 TTS Service - Voice cloning and synthesis
   qwen-tts:
     build:
       context: ./qwen_tts_service
@@ -99,15 +68,14 @@ services:
       - VOICEVOX_URL=http://voicevox:50021
       - QWEN_TTS_SERVICE_URL=http://qwen-tts:8002  # Qwen3-TTS voice cloning service
       - MUSETALK_SERVICE_URL=http://musetalk:8003  # MuseTalk lip-sync service
-      - USE_LOCAL_TTS=true  # Use local Qwen3-TTS instead of OpenVoice
-      - USE_LOCAL_LIPSYNC=true  # Use local MuseTalk instead of D-ID API
-      - D_ID_API_KEY=${D_ID_API_KEY:-your-d-id-api-key-here}  # Fallback to D-ID if needed
+      - USE_LOCAL_TTS=true  # Use local Qwen3-TTS for voice cloning
+      - USE_LOCAL_LIPSYNC=true  # Use local MuseTalk for lip-sync
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     networks:
       - voice_network
     depends_on:
       - voicevox
-      - qwen-tts  # Changed from openvoice to qwen-tts for local inference
+      - qwen-tts
       - musetalk
     restart: unless-stopped
 
@@ -146,5 +114,4 @@ networks:
     driver: bridge
 
 volumes:
-  openvoice-tmp:  # OpenVoice一時ファイル用ボリューム（自動削除）
   qwen3-models:   # Qwen3 TTS model cache volume

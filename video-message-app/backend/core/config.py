@@ -6,16 +6,18 @@ import os
 class Settings(BaseSettings):
     cors_origins: List[str] = Field(default_factory=lambda: os.getenv("CORS_ORIGINS", "http://localhost:55434").split(","))
     max_file_size: int = 5 * 1024 * 1024  # 5MB
+    # DEPRECATED: D-ID cloud API key - kept for potential cloud fallback only
     did_api_key: Optional[str] = Field(
         default=None,
         alias="DID_API_KEY",
-        description="D-ID API key for lip-sync video generation"
+        description="DEPRECATED: D-ID API key (unused - MuseTalk handles lip-sync locally)"
     )
 
     # 環境変数パス管理
     docker_env: str = os.environ.get('DOCKER_ENV', 'false')
     storage_root_path: str = os.environ.get('STORAGE_ROOT_PATH', '/app/storage/voices')
     voicevox_base_url: str = os.environ.get('VOICEVOX_BASE_URL', 'http://voicevox_engine:50021')
+    # DEPRECATED: OpenVoice service has been replaced by Qwen3-TTS (qwen_tts_service_url)
     openvoice_api_url: str = os.environ.get('OPENVOICE_API_URL', 'http://host.docker.internal:8001')
     debug_mode: str = os.environ.get('DEBUG_MODE', 'false')
     log_level: str = os.environ.get('LOG_LEVEL', 'INFO')
@@ -26,30 +28,30 @@ class Settings(BaseSettings):
     # Local Inference Services (Qwen3-TTS, MuseTalk)
     # =========================================================================
 
-    # Qwen3-TTS Service (replaces OpenVoice)
+    # Qwen3-TTS Service (voice cloning and synthesis)
     qwen_tts_service_url: str = Field(
         default=os.environ.get('QWEN_TTS_SERVICE_URL', 'http://qwen-tts:8002'),
         description="Qwen3-TTS service URL for voice cloning and synthesis"
     )
     use_local_tts: bool = Field(
         default=os.environ.get('USE_LOCAL_TTS', 'true').lower() == 'true',
-        description="Use local Qwen3-TTS service instead of OpenVoice"
+        description="Use local Qwen3-TTS service for voice cloning"
     )
 
-    # MuseTalk Service (replaces D-ID API)
+    # MuseTalk Service (local lip-sync)
     musetalk_service_url: str = Field(
         default=os.environ.get('MUSETALK_SERVICE_URL', 'http://musetalk:8003'),
         description="MuseTalk service URL for lip-sync video generation"
     )
     use_local_lipsync: bool = Field(
         default=os.environ.get('USE_LOCAL_LIPSYNC', 'true').lower() == 'true',
-        description="Use local MuseTalk service instead of D-ID API"
+        description="Use local MuseTalk service for lip-sync video generation"
     )
 
     # Fallback behavior
     fallback_to_cloud: bool = Field(
         default=os.environ.get('FALLBACK_TO_CLOUD', 'true').lower() == 'true',
-        description="Fallback to cloud services (OpenVoice/D-ID) if local services unavailable"
+        description="Fallback to cloud services if local services unavailable"
     )
 
     # LaMa Inpainting settings for clothing repair
@@ -135,9 +137,8 @@ class Settings(BaseSettings):
 
     def get_tts_service_url(self) -> str:
         """Get the appropriate TTS service URL based on configuration."""
-        if self.should_use_local_tts:
-            return self.qwen_tts_service_url
-        return self.openvoice_api_url
+        # Always use Qwen3-TTS (OpenVoice service is deprecated)
+        return self.qwen_tts_service_url
 
     def get_lipsync_service_info(self) -> dict:
         """Get lip-sync service configuration."""

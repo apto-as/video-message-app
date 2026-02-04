@@ -227,23 +227,6 @@ class VoiceStorageService:
                     logger.error(f"プロファイル {profile_id} は存在しません")
                     return False
             
-            # OpenVoice Native Serviceからもプロファイルを削除
-            try:
-                import requests
-                from core.environment_config import env_config
-                
-                # 環境設定システムを使用してURLを取得
-                service_urls = env_config.get_voice_service_urls()
-                native_service_url = service_urls.get("openvoice")
-                
-                response = requests.delete(f"{native_service_url}/voice-clone/profiles/{profile_id}")
-                if response.status_code == 200:
-                    logger.info(f"OpenVoice Native Serviceからプロファイル削除成功: {profile_id}")
-                else:
-                    logger.warning(f"OpenVoice Native Service削除失敗 (続行): {response.status_code}")
-            except Exception as native_error:
-                logger.warning(f"OpenVoice Native Service削除エラー (続行): {str(native_error)}")
-            
             # ディレクトリとファイルを削除（存在する場合）
             if profile_dir.exists():
                 logger.info(f"プロファイルディレクトリ削除: {profile_dir}")
@@ -262,23 +245,7 @@ class VoiceStorageService:
             embedding_file = self.embeddings_dir / f"{profile_id}.pt"
             if embedding_file.exists():
                 embedding_file.unlink()
-            
-            # OpenVoice埋め込みファイルも削除（異なるパスにある場合）
-            if embedding_path:
-                    try:
-                        # Docker環境とローカル環境のパス変換
-                        if embedding_path.startswith("/app/"):
-                            # Docker環境のパスをローカルパスに変換
-                            local_path = embedding_path.replace("/app/", str(self.storage_root.parents[2]) + "/data/backend/")
-                            embedding_file = Path(local_path)
-                        else:
-                            embedding_file = Path(embedding_path)
-                        
-                        if embedding_file.exists():
-                            embedding_file.unlink()
-                            logger.info(f"埋め込みファイル削除: {embedding_file}")
-                    except Exception as e:
-                        logger.warning(f"埋め込みファイル削除エラー: {str(e)}")
+                logger.info(f"埋め込みファイル削除: {embedding_file}")
             
             # ファイルもメタデータも削除されたか、またはメタデータから削除された場合は成功
             if deleted_files or profile_id not in metadata.get("profiles", {}):

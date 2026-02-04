@@ -7,7 +7,7 @@ import LoadingSpinner from './LoadingSpinner';
 import BackgroundProcessor from './BackgroundProcessor';
 import PersonDetector from './PersonDetector';
 import VoiceVoxSelector from './VoiceVoxSelector';
-import { generateVideoWithVoicevox, generateVideoWithOpenVoice } from '../services/api';
+import { generateVideoWithVoicevox, generateVideoWithClonedVoice } from '../services/api';
 import './VideoGenerator.css';
 
 const VideoGenerator = () => {
@@ -58,8 +58,8 @@ const VideoGenerator = () => {
       // 音声合成と動画生成を統合して実行
       if (selectedVoice && selectedVoice.provider === 'voicevox') {
         result = await generateVideoWithVoicevox(imageToUse, text, selectedVoice, audioParams);
-      } else if (selectedVoice && selectedVoice.provider === 'openvoice') {
-        result = await generateVideoWithOpenVoice(imageToUse, text, selectedVoice, audioParams);
+      } else if (selectedVoice && selectedVoice.provider === 'voice-clone') {
+        result = await generateVideoWithClonedVoice(imageToUse, text, selectedVoice, audioParams);
       } else {
         throw new Error('音声を選択してください');
       }
@@ -270,9 +270,9 @@ const VideoGenerator = () => {
             </div>
           )}
 
-          {selectedVoice && selectedVoice.provider === 'openvoice' && (
-            <div className="openvoice-params">
-              <h4>OpenVoice V2 設定</h4>
+          {selectedVoice && selectedVoice.provider === 'voice-clone' && (
+            <div className="clone-voice-params">
+              <h4>Voice Clone 設定</h4>
               <div className="params-grid">
                 <div className="param-control">
                   <label>話速: {audioParams.speed.toFixed(1)}</label>

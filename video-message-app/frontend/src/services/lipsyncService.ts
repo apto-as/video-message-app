@@ -1,7 +1,7 @@
 /**
  * リップシンク動画生成 API（MuseTalk経由）
- * 音声クローニング機能は削除し、OpenVoice V2を使用
- * エンドポイントはD-ID互換パスを維持（/api/d-id/*）
+ * 音声合成にはQwen3-TTSを使用
+ * エンドポイント: /api/lipsync/*
  */
 
 export interface VideoGenerationRequest {
@@ -20,8 +20,8 @@ export interface SourceImageUploadResponse {
   url: string;
 }
 
-class DIdService {
-  private baseUrl = '/api/d-id';
+class LipsyncService {
+  private baseUrl = '/api/lipsync';
 
   /**
    * リップシンク動画を生成（MuseTalk経由）
@@ -95,4 +95,4 @@ class DIdService {
   }
 }
 
-export const dIdService = new DIdService();
+export const lipsyncService = new LipsyncService();

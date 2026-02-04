@@ -1,3 +1,6 @@
+# DEPRECATED: D-ID cloud API code - to be removed
+# This webhook verifier was used for D-ID cloud API webhook callbacks.
+# The current system uses MuseTalk for local lip-sync video generation instead.
 """
 D-ID Webhook 署名検証
 

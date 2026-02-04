@@ -1,6 +1,6 @@
 """
 統合音声APIルーター
-VOICEVOX、OpenVoice、D-IDを統一インターフェースで提供
+VOICEVOX、Qwen3-TTSを統一インターフェースで提供
 """
 
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, BackgroundTasks, Request
@@ -34,7 +34,7 @@ class VoiceListRequest(BaseModel):
 
 class CloneVoiceRequest(BaseModel):
     voice_name: str = Field(..., min_length=1, max_length=50)
-    provider: VoiceProvider = VoiceProvider.OPENVOICE
+    provider: VoiceProvider = VoiceProvider.VOICE_CLONE
     language: str = Field(default="ja", pattern="^(ja|en|zh|es|fr|ko)$")
 
 class SynthesisRequestAPI(BaseModel):
@@ -140,7 +140,7 @@ async def synthesize_speech(
                     voice_profile = VoiceProfile(
                         id=profile_id,
                         name=request_data.voice_profile.get('name', 'Unknown'),
-                        provider=VoiceProvider(request_data.voice_profile.get('provider', 'openvoice')),
+                        provider=VoiceProvider(request_data.voice_profile.get('provider', 'voice-clone')),
                         voice_type=VoiceType(request_data.voice_profile.get('voice_type', 'cloned')),
                         language=request_data.voice_profile.get('language', 'ja'),
                         voice_file_path=request_data.voice_profile.get('voice_file_path'),
@@ -237,10 +237,10 @@ async def get_providers():
                 "languages": ["ja"]
             },
             {
-                "id": "openvoice",
-                "name": "OpenVoice V2",
-                "description": "オープンソース音声クローンエンジン",
-                "features": ["voice_cloning", "multilingual", "mit_license"],
+                "id": "voice-clone",
+                "name": "Voice Clone (Qwen3-TTS)",
+                "description": "Qwen3-TTSベースの音声クローンエンジン",
+                "features": ["voice_cloning", "multilingual", "local_inference"],
                 "languages": ["ja", "en", "zh", "es", "fr", "ko"]
             }
         ]
@@ -272,7 +272,7 @@ async def get_voice_types():
 @router.post("/test")
 async def test_synthesis():
     """音声合成テスト（デバッグ用）"""
-    test_text = "統合音声サービスのテストです。VOICEVOX、OpenVoice、D-IDの統合が正常に動作しています。"
+    test_text = "統合音声サービスのテストです。VOICEVOX、Qwen3-TTSの統合が正常に動作しています。"
     
     try:
         service = await get_unified_voice_service()

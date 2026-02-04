@@ -19,7 +19,8 @@ class VoiceProvider(str, Enum):
     """音声プロバイダー"""
     VOICEVOX = "voicevox"
     QWEN_TTS = "qwen3-tts"
-    # Legacy alias for backward compatibility
+    VOICE_CLONE = "voice-clone"
+    # Legacy alias for backward compatibility (deprecated)
     OPENVOICE = "openvoice"
 
 class VoiceType(str, Enum):
@@ -150,8 +151,8 @@ class UnifiedVoiceService:
         voices = list(self._voice_profiles.values())
 
         if provider:
-            # "openvoice" リクエストをqwen3-ttsにマッピング（後方互換性）
-            if provider == VoiceProvider.OPENVOICE:
+            # "openvoice" / "voice-clone" リクエストをqwen3-ttsにマッピング（後方互換性）
+            if provider in (VoiceProvider.OPENVOICE, VoiceProvider.VOICE_CLONE):
                 provider = VoiceProvider.QWEN_TTS
             voices = [v for v in voices if v.provider == provider]
         if voice_type:
@@ -183,7 +184,7 @@ class UnifiedVoiceService:
         try:
             if profile.provider == VoiceProvider.VOICEVOX:
                 return await self._synthesize_voicevox(request)
-            elif profile.provider in (VoiceProvider.QWEN_TTS, VoiceProvider.OPENVOICE):
+            elif profile.provider in (VoiceProvider.QWEN_TTS, VoiceProvider.OPENVOICE, VoiceProvider.VOICE_CLONE):
                 return await self._synthesize_qwen_tts(request)
             else:
                 raise ValueError(f"サポートされていないプロバイダー: {profile.provider}")
@@ -235,7 +236,7 @@ class UnifiedVoiceService:
     ) -> VoiceProfile:
         """音声クローン実行"""
 
-        if provider in (VoiceProvider.QWEN_TTS, VoiceProvider.OPENVOICE):
+        if provider in (VoiceProvider.QWEN_TTS, VoiceProvider.OPENVOICE, VoiceProvider.VOICE_CLONE):
             if not self.qwen_tts_client:
                 raise Exception("Qwen3-TTSクライアントが初期化されていません")
 
