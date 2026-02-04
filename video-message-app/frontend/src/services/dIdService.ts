@@ -1,6 +1,7 @@
 /**
- * D-ID API サービス（動画生成機能のみ）
+ * リップシンク動画生成 API（MuseTalk経由）
  * 音声クローニング機能は削除し、OpenVoice V2を使用
+ * エンドポイントはD-ID互換パスを維持（/api/d-id/*）
  */
 
 export interface VideoGenerationRequest {
@@ -23,7 +24,7 @@ class DIdService {
   private baseUrl = '/api/d-id';
 
   /**
-   * D-IDを使用して動画を生成
+   * リップシンク動画を生成（MuseTalk経由）
    */
   async generateVideo(request: VideoGenerationRequest): Promise<VideoGenerationResponse> {
     try {
@@ -42,7 +43,7 @@ class DIdService {
 
       return await response.json();
     } catch (error) {
-      console.error('D-ID動画生成エラー:', error);
+      console.error('リップシンク動画生成エラー:', error);
       throw error;
     }
   }
@@ -76,9 +77,9 @@ class DIdService {
   }
 
   /**
-   * D-IDサービスのヘルスチェック
+   * リップシンクサービスのヘルスチェック
    */
-  async healthCheck(): Promise<{ status: string; api_key_configured: boolean }> {
+  async healthCheck(): Promise<{ status: string; primary_service?: string }> {
     try {
       const response = await fetch(`${this.baseUrl}/health`);
 
@@ -88,8 +89,8 @@ class DIdService {
 
       return await response.json();
     } catch (error) {
-      console.error('D-IDヘルスチェックエラー:', error);
-      return { status: 'error', api_key_configured: false };
+      console.error('リップシンクヘルスチェックエラー:', error);
+      return { status: 'error' };
     }
   }
 }

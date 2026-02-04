@@ -35,11 +35,12 @@ export const API_CONFIG = {
     UNIFIED_VOICE_SYNTHESIZE: '/unified-voice/synthesize',
     UNIFIED_VOICE_CLONE: '/unified-voice/clone',
     
-    // D-ID関連
+    // D-ID互換エンドポイント（バックエンド経由でMuseTalkにルーティング）
     DID_UPLOAD_IMAGE: '/d-id/upload-source-image',
     DID_UPLOAD_AUDIO: '/d-id/upload-audio',
     DID_GENERATE_VIDEO: '/d-id/generate-video',
-    
+    DID_VIDEOS: '/d-id/videos',  // Generated video serving
+
     // Background Processing
     PROCESS_IMAGE: '/process-image',
     PROCESS_BACKGROUND: '/background/process',
