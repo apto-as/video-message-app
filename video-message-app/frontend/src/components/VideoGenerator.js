@@ -170,9 +170,6 @@ const VideoGenerator = () => {
                 <li>背景削除: {processingInfo.background_removed ? 'OK' : 'NG'}</li>
                 <li>背景合成: {processingInfo.background_composited ? 'OK' : 'NG'}</li>
                 <li>画質向上: {processingInfo.quality_enhanced ? 'OK' : 'NG'}</li>
-                {processingInfo.upper_body_cropped !== undefined && (
-                  <li>上半身クロップ: {processingInfo.upper_body_cropped ? 'OK' : 'NG'}</li>
-                )}
               </ul>
             </div>
           )}

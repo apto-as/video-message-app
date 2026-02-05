@@ -400,7 +400,50 @@ async def extract_selected_person(
                 result = padded_result
                 final_h, final_w = padded_h, padded_w
 
-            # Encode as PNG
+            # Smart upper-body crop for optimal MuseTalk/LivePortrait input
+            upper_body_cropped = False
+            crop_metadata = None
+            if settings.upper_body_crop_enabled:
+                try:
+                    from services.upper_body_cropper import get_upper_body_cropper
+                    import io
+                    from PIL import Image as PILImage
+
+                    cropper = get_upper_body_cropper(
+                        target_size=settings.upper_body_crop_target_size,
+                        face_ratio=settings.upper_body_crop_face_ratio,
+                    )
+
+                    # Compose BGRA onto white background for face detection
+                    rgba_pil = PILImage.fromarray(cv2.cvtColor(result, cv2.COLOR_BGRA2RGBA))
+                    white_bg = PILImage.new("RGB", rgba_pil.size, (255, 255, 255))
+                    white_bg.paste(rgba_pil, mask=rgba_pil.split()[3])
+                    buf = io.BytesIO()
+                    white_bg.save(buf, format="JPEG", quality=95)
+                    rgb_bytes = buf.getvalue()
+
+                    cropped_bytes, crop_metadata = await cropper.crop_upper_body(rgb_bytes)
+                    upper_body_cropped = True
+                    logger.info(f"Upper-body crop: {crop_metadata}")
+
+                    # Use cropped image for response
+                    cropped_base64 = base64.b64encode(cropped_bytes).decode('utf-8')
+                    return {
+                        "success": True,
+                        "image_id": file_id,
+                        "extracted_persons": [p["person_id"] for p in selected_persons],
+                        "total_persons_detected": len(all_persons),
+                        "processed_image": f"data:image/jpeg;base64,{cropped_base64}",
+                        "image_dimensions": {"width": settings.upper_body_crop_target_size, "height": settings.upper_body_crop_target_size},
+                        "padding_added": add_transparent_padding,
+                        "padding_size": transparent_padding_size if add_transparent_padding else 0,
+                        "upper_body_cropped": True,
+                        "crop_metadata": crop_metadata
+                    }
+                except Exception as e:
+                    logger.warning(f"Upper-body crop failed, using uncropped extraction: {e}")
+
+            # Encode as PNG (fallback if crop disabled or failed)
             _, png_bytes = cv2.imencode('.png', result)
             png_base64 = base64.b64encode(png_bytes.tobytes()).decode('utf-8')
 
@@ -412,7 +455,8 @@ async def extract_selected_person(
                 "processed_image": f"data:image/png;base64,{png_base64}",
                 "image_dimensions": {"width": final_w, "height": final_h},
                 "padding_added": add_transparent_padding,
-                "padding_size": transparent_padding_size if add_transparent_padding else 0
+                "padding_size": transparent_padding_size if add_transparent_padding else 0,
+                "upper_body_cropped": False
             }
 
         except ImportError:
@@ -458,6 +502,45 @@ async def extract_selected_person(
                 result = padded_result
                 final_h, final_w = padded_h, padded_w
 
+            # Smart upper-body crop (fallback path)
+            if settings.upper_body_crop_enabled:
+                try:
+                    from services.upper_body_cropper import get_upper_body_cropper
+                    import io
+                    from PIL import Image as PILImage
+
+                    cropper = get_upper_body_cropper(
+                        target_size=settings.upper_body_crop_target_size,
+                        face_ratio=settings.upper_body_crop_face_ratio,
+                    )
+
+                    rgba_pil = PILImage.fromarray(cv2.cvtColor(result, cv2.COLOR_BGRA2RGBA))
+                    white_bg = PILImage.new("RGB", rgba_pil.size, (255, 255, 255))
+                    white_bg.paste(rgba_pil, mask=rgba_pil.split()[3])
+                    buf = io.BytesIO()
+                    white_bg.save(buf, format="JPEG", quality=95)
+                    rgb_bytes = buf.getvalue()
+
+                    cropped_bytes, crop_metadata = await cropper.crop_upper_body(rgb_bytes)
+                    logger.info(f"Upper-body crop (fallback): {crop_metadata}")
+
+                    cropped_base64 = base64.b64encode(cropped_bytes).decode('utf-8')
+                    return {
+                        "success": True,
+                        "image_id": file_id,
+                        "extracted_persons": [p["person_id"] for p in selected_persons],
+                        "total_persons_detected": len(all_persons),
+                        "processed_image": f"data:image/jpeg;base64,{cropped_base64}",
+                        "image_dimensions": {"width": settings.upper_body_crop_target_size, "height": settings.upper_body_crop_target_size},
+                        "padding_added": add_transparent_padding,
+                        "padding_size": transparent_padding_size if add_transparent_padding else 0,
+                        "upper_body_cropped": True,
+                        "crop_metadata": crop_metadata,
+                        "note": "Background removal not available, using bbox extraction only"
+                    }
+                except Exception as e:
+                    logger.warning(f"Upper-body crop failed (fallback path): {e}")
+
             _, png_bytes = cv2.imencode('.png', result)
             png_base64 = base64.b64encode(png_bytes.tobytes()).decode('utf-8')
 
@@ -470,6 +553,7 @@ async def extract_selected_person(
                 "image_dimensions": {"width": final_w, "height": final_h},
                 "padding_added": add_transparent_padding,
                 "padding_size": transparent_padding_size if add_transparent_padding else 0,
+                "upper_body_cropped": False,
                 "note": "Background removal not available, using bbox extraction only"
             }
 
