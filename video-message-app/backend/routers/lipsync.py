@@ -132,6 +132,19 @@ async def generate_video(request: VideoGenerationRequest):
         audio_data = audio_path.read_bytes()
         image_data = image_path.read_bytes()
 
+        # Smart upper-body crop for optimal MuseTalk/LivePortrait input
+        if settings.upper_body_crop_enabled:
+            from services.upper_body_cropper import get_upper_body_cropper
+            cropper = get_upper_body_cropper(
+                target_size=settings.upper_body_crop_target_size,
+                face_ratio=settings.upper_body_crop_face_ratio,
+            )
+            try:
+                image_data, crop_metadata = await cropper.crop_upper_body(image_data)
+                logger.info(f"Upper-body crop: {crop_metadata}")
+            except Exception as e:
+                logger.warning(f"Upper-body crop failed, using original image: {e}")
+
         logger.info(
             f"MuseTalk動画生成開始: audio={audio_path.name} ({len(audio_data)} bytes), "
             f"image={image_path.name} ({len(image_data)} bytes)"

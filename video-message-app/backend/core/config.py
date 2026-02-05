@@ -54,6 +54,22 @@ class Settings(BaseSettings):
         description="Fallback to cloud services if local services unavailable"
     )
 
+    # Upper-body cropper settings
+    upper_body_crop_enabled: bool = Field(
+        default=True,
+        description="Enable smart upper-body cropping before MuseTalk/LivePortrait"
+    )
+    upper_body_crop_target_size: int = Field(
+        default=512,
+        description="Target output size (square) for upper-body crop"
+    )
+    upper_body_crop_face_ratio: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Target face height ratio in cropped output (0.4-0.6 optimal)"
+    )
+
     # LaMa Inpainting settings for clothing repair
     inpainting_enabled: bool = Field(
         default=True,

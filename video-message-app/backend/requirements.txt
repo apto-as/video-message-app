@@ -40,13 +40,14 @@ librosa>=0.10.0
 resampy>=0.4.2  # librosaの高品質リサンプリング用
 
 # Mac環境用追加依存関係
-scipy>=1.7.0; sys_platform == "darwin"
+scipy>=1.7.0
 
 # YOLOv8 Person Detection (Phase 2)
 # Note: torch and torchvision are installed in Dockerfile with CUDA support
 # torch==2.0.0+cu118 (installed via Dockerfile)
 # torchvision==0.15.1+cu118 (installed via Dockerfile)
 ultralytics==8.0.196
+face-alignment==1.4.1
 
 # LaMa Inpainting for clothing repair (Phase 1.5)
 # Repairs white/light clothing damaged by rembg background removal
