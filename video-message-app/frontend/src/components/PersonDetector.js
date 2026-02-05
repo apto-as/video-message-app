@@ -20,6 +20,7 @@ const PersonDetector = ({
   const [confThreshold, setConfThreshold] = useState(0.5);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const [isExpanded, setIsExpanded] = useState(false);
+  const [extractedImageUrl, setExtractedImageUrl] = useState(null);
 
   const imageRef = useRef(null);
 
@@ -28,6 +29,7 @@ const PersonDetector = ({
     setDetectedPersons([]);
     setSelectedPersonIds(new Set());
     setError(null);
+    setExtractedImageUrl(null);
   }, [image]);
 
   // Handle image load to get dimensions
@@ -108,6 +110,7 @@ const PersonDetector = ({
       // Pass the processed image to parent
       // Note: rembg is used in backend to remove background during extraction
       if (onProcessedImage && result.processed_image) {
+        setExtractedImageUrl(result.processed_image);
         onProcessedImage(result.processed_image, {
           person_detection: true,
           extracted_count: selectedPersonIds.size,
@@ -261,6 +264,17 @@ const PersonDetector = ({
                 >
                   {isExtracting ? '抽出中...' : `選択した${selectedPersonIds.size}人を抽出`}
                 </button>
+              )}
+
+              {extractedImageUrl && (
+                <div className="extracted-preview">
+                  <h5>抽出結果</h5>
+                  <img
+                    src={extractedImageUrl}
+                    alt="抽出された人物"
+                    className="extracted-image"
+                  />
+                </div>
               )}
             </div>
           )}
@@ -539,6 +553,29 @@ const PersonDetector = ({
           margin-left: auto;
           color: #888;
           font-size: 12px;
+        }
+
+        .extracted-preview {
+          margin-top: 16px;
+          padding: 12px;
+          border: 1px solid #4caf50;
+          border-radius: 6px;
+          background: #f1f8e9;
+        }
+
+        .extracted-preview h5 {
+          margin: 0 0 10px 0;
+          color: #2e7d32;
+          font-size: 13px;
+        }
+
+        .extracted-image {
+          max-width: 100%;
+          max-height: 300px;
+          object-fit: contain;
+          border-radius: 6px;
+          border: 1px solid #c8e6c9;
+          display: block;
         }
 
         @media (max-width: 600px) {

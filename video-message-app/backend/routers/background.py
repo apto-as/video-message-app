@@ -22,6 +22,7 @@ from datetime import datetime
 import logging
 
 from services.image_processor import ImageProcessor
+from core.config import settings
 from security.image_validator import (
     ImageSecurityValidator,
     ProcessingTimeoutManager,
@@ -149,6 +150,19 @@ async def process_image(
                     enhance_quality=enhance_quality
                 )
 
+                # Smart upper-body crop for optimal MuseTalk/LivePortrait input
+                if settings.upper_body_crop_enabled:
+                    from services.upper_body_cropper import get_upper_body_cropper
+                    cropper = get_upper_body_cropper(
+                        target_size=settings.upper_body_crop_target_size,
+                        face_ratio=settings.upper_body_crop_face_ratio,
+                    )
+                    try:
+                        processed_image_bytes, crop_metadata = await cropper.crop_upper_body(processed_image_bytes)
+                        logger.info(f"Upper-body crop: {crop_metadata}")
+                    except Exception as e:
+                        logger.warning(f"Upper-body crop failed, using uncropped image: {e}")
+
                 # Check timeout after processing
                 timeout.check_timeout()
         
@@ -156,6 +170,7 @@ async def process_image(
             "background_removed": remove_background,
             "background_composited": background_content is not None,
             "quality_enhanced": enhance_quality,
+            "upper_body_cropped": settings.upper_body_crop_enabled,
             "original_size": len(image_content),
             "processed_size": len(processed_image_bytes),
             "processed_at": datetime.now().isoformat()
