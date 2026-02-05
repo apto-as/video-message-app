@@ -27,7 +27,6 @@ import tempfile
 import os
 
 # Import services
-from backend.services.video_pipeline import VideoPipeline
 from backend.services.voice_pipeline_unified import VoicePipelineUnified, get_voice_pipeline
 from backend.services.storage_manager import StorageManager, StorageTier
 from backend.security.file_validator import FileValidator, SecurityViolation
@@ -527,36 +526,6 @@ class TestAuthentication:
     ...認証・認可のテストです。
     不正アクセスを防ぎます。
     """
-
-    async def test_api_key_required(self):
-        """
-        Test: D-ID API key required
-
-        ...APIキーがない場合は拒否します。
-        """
-        from backend.services.d_id_client import DIdClient
-
-        # Try to create client without API key
-        with pytest.raises(ValueError, match="API key|required"):
-            client = DIdClient(api_key="")
-
-    async def test_api_key_not_logged(self, tmp_path):
-        """
-        Test: API key not logged in plain text
-
-        ...APIキーがログに記録されないことを確認します。
-        """
-        from backend.services.d_id_client import DIdClient
-
-        fake_key = "test_api_key_secret_123"
-        client = DIdClient(api_key=fake_key)
-
-        # Check that key is not in logs
-        # (This would require actual logging setup)
-        # For now, just ensure key is stored securely
-        assert hasattr(client, "api_key")
-        # Key should not be in __dict__ as plain text
-        # (Should be stored securely, e.g., in _api_key)
 
     async def test_unauthorized_file_access(self, tmp_path):
         """

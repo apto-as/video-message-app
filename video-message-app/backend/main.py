@@ -16,8 +16,6 @@ except ImportError:
     PERSON_DETECTION_AVAILABLE = False
     logger = None  # Will be set after logging is initialized
 
-# REMOVED: D-ID cloud video generation pipeline (replaced by MuseTalk lipsync)
-VIDEO_GENERATION_AVAILABLE = False
 from core.logging import setup_logging, get_logger, log_api_request, log_error, log_info
 from services.progress_tracker import progress_tracker
 from middleware.rate_limiter import limiter, rate_limit_exceeded_handler, check_redis_health
@@ -77,13 +75,6 @@ else:
 
 app.include_router(websocket.router, prefix="/api", tags=["websocket"])
 app.include_router(sse.router, prefix="/api", tags=["sse"])
-
-# Optional: Video Generation (Phase 2 - 2025年12月)
-if VIDEO_GENERATION_AVAILABLE:
-    app.include_router(video_generation.router, tags=["video-generation"])
-    log_info("Video generation router enabled (torch dependencies available)")
-else:
-    logger.warning("Video generation router disabled (torch dependencies not installed)")
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
