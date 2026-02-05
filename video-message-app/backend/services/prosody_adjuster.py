@@ -73,6 +73,65 @@ class ProsodyAdjustmentResult(BaseModel):
     error_message: Optional[str] = None
 
 
+# Emotion presets: 感情に応じたProsodyパラメータ
+EMOTION_PRESETS: Dict[str, Dict[str, float]] = {
+    "neutral": {"speed": 1.0, "pitch": 0.0, "volume_db": 0.0},
+    "happy": {"speed": 1.1, "pitch": 2.0, "volume_db": 2.0},
+    "sad": {"speed": 0.85, "pitch": -1.5, "volume_db": -3.0},
+    "angry": {"speed": 1.15, "pitch": 1.0, "volume_db": 4.0},
+    "excited": {"speed": 1.25, "pitch": 3.0, "volume_db": 3.0},
+}
+
+
+def get_emotion_config(emotion: str, base_config: ProsodyConfig) -> ProsodyConfig:
+    """
+    感情プリセットをベースConfig にマージする。
+
+    - speed: ベース値にプリセット値を乗算
+    - pitch: ベース値にプリセット値を加算
+    - volume_db: ベース値にプリセット値を加算
+
+    Args:
+        emotion: 感情名 (neutral, happy, sad, angry, excited)
+        base_config: ユーザーが指定した手動設定
+
+    Returns:
+        マージ済みの ProsodyConfig
+    """
+    preset = EMOTION_PRESETS.get(emotion)
+    if preset is None:
+        logger.warning(f"未知の感情プリセット '{emotion}', neutralとして扱います")
+        return base_config
+
+    # neutral の場合は変更なし
+    if emotion == "neutral":
+        return base_config
+
+    merged_speed = base_config.speed_rate * preset["speed"]
+    merged_pitch = base_config.pitch_shift + preset["pitch"]
+    merged_volume = base_config.volume_db + preset["volume_db"]
+
+    # 範囲クランプ
+    merged_speed = max(0.5, min(2.0, merged_speed))
+    merged_pitch = max(-12.0, min(12.0, merged_pitch))
+    merged_volume = max(-20.0, min(20.0, merged_volume))
+
+    logger.info(
+        f"感情プリセット '{emotion}' 適用: "
+        f"speed {base_config.speed_rate:.2f} -> {merged_speed:.2f}, "
+        f"pitch {base_config.pitch_shift:+.1f} -> {merged_pitch:+.1f}, "
+        f"volume {base_config.volume_db:+.1f} -> {merged_volume:+.1f}"
+    )
+
+    return ProsodyConfig(
+        speed_rate=merged_speed,
+        pitch_shift=merged_pitch,
+        volume_db=merged_volume,
+        pause_duration=base_config.pause_duration,
+        preserve_formants=base_config.preserve_formants,
+    )
+
+
 class ProsodyAdjuster:
     """
     Prosody調整エンジン
@@ -382,6 +441,96 @@ class ProsodyAdjuster:
         except Exception as e:
             logger.error(f"音声エンコードエラー: {str(e)}")
             raise ValueError(f"音声のエンコードに失敗しました: {str(e)}")
+
+    @staticmethod
+    def concatenate_with_silence(
+        audio_segments: list,
+        silence_duration: float = 0.3,
+        sample_rate: int = 24000
+    ) -> bytes:
+        """
+        複数の音声セグメントを無音で連結する。
+
+        境界にはクリック防止の10msフェードイン/フェードアウトを適用。
+
+        Args:
+            audio_segments: WAVバイト列のリスト
+            silence_duration: セグメント間の無音長 (秒)
+            sample_rate: サンプルレート (Hz)
+
+        Returns:
+            連結されたWAVバイナリデータ
+        """
+        if not audio_segments:
+            raise ValueError("音声セグメントが空です")
+
+        if len(audio_segments) == 1:
+            return audio_segments[0]
+
+        fade_samples = int(sample_rate * 0.01)  # 10ms fade
+        silence_samples = int(sample_rate * silence_duration)
+        silence = np.zeros(silence_samples, dtype=np.float32)
+
+        combined_parts = []
+
+        for i, segment_bytes in enumerate(audio_segments):
+            try:
+                audio, sr = sf.read(io.BytesIO(segment_bytes))
+
+                # ステレオ -> モノラル
+                if audio.ndim > 1:
+                    audio = librosa.to_mono(audio.T)
+
+                # リサンプル（サンプルレートが異なる場合）
+                if sr != sample_rate:
+                    audio = librosa.resample(
+                        audio, orig_sr=sr, target_sr=sample_rate, res_type='kaiser_best'
+                    )
+
+                audio = audio.astype(np.float32)
+
+                # フェードアウト（末尾）: 最後のセグメント以外
+                if i < len(audio_segments) - 1 and len(audio) > fade_samples:
+                    fade_out = np.linspace(1.0, 0.0, fade_samples, dtype=np.float32)
+                    audio[-fade_samples:] *= fade_out
+
+                # フェードイン（先頭）: 最初のセグメント以外
+                if i > 0 and len(audio) > fade_samples:
+                    fade_in = np.linspace(0.0, 1.0, fade_samples, dtype=np.float32)
+                    audio[:fade_samples] *= fade_in
+
+                combined_parts.append(audio)
+
+                # セグメント間に無音を挿入（最後のセグメントの後は不要）
+                if i < len(audio_segments) - 1:
+                    combined_parts.append(silence.copy())
+
+            except Exception as e:
+                logger.warning(f"セグメント {i} の処理エラー: {e}, スキップします")
+                continue
+
+        if not combined_parts:
+            raise ValueError("有効な音声セグメントがありません")
+
+        combined_audio = np.concatenate(combined_parts)
+
+        # クリッピング防止
+        peak = np.abs(combined_audio).max()
+        if peak > 0.95:
+            combined_audio = combined_audio * (0.95 / peak)
+
+        # WAVエンコード
+        buffer = io.BytesIO()
+        sf.write(buffer, combined_audio, sample_rate, format='WAV', subtype='PCM_16')
+        buffer.seek(0)
+
+        logger.info(
+            f"音声連結完了: {len(audio_segments)}セグメント, "
+            f"無音{silence_duration:.2f}s, "
+            f"合計{len(combined_audio) / sample_rate:.2f}s"
+        )
+
+        return buffer.read()
 
     def validate_audio(self, audio_data: bytes) -> Dict[str, Any]:
         """
