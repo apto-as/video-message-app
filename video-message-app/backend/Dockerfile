@@ -38,6 +38,7 @@ RUN apt-get update && apt-get install -y \
     libsndfile1-dev \
     portaudio19-dev \
     build-essential \
+    cmake \
     curl \
     git \
     pkg-config \
