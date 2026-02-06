@@ -27,9 +27,9 @@ class Config:
 
     # JoyVASA Model Paths (Audio -> Motion)
     JOYVASA_DIR = MODELS_DIR / "JoyVASA"
-    JOYVASA_MOTION_GENERATOR = JOYVASA_DIR / "motion_generator" / "iter_0020000.pt"
-    JOYVASA_MOTION_TEMPLATE = JOYVASA_DIR / "motion_template.pkl"
-    JOYVASA_CONFIG = JOYVASA_DIR / "config.yaml"
+    JOYVASA_MOTION_GENERATOR = JOYVASA_DIR / "motion_generator" / "motion_generator_hubert_chinese.pt"
+    JOYVASA_MOTION_TEMPLATE = JOYVASA_DIR / "motion_template" / "motion_template.pkl"
+    JOYVASA_CONFIG = JOYVASA_DIR / "config.json"  # HuggingFace uses config.json
 
     # HuBERT Model for Audio Feature Extraction
     HUBERT_DIR = MODELS_DIR / "chinese-hubert-base"

@@ -61,7 +61,7 @@ services:
       - "8004:8004"
     volumes:
       - ./data/backend/storage:/app/storage
-      - ./data/liveportrait/checkpoints:/app/models/liveportrait_onnx:ro
+      - ./data/liveportrait/checkpoints/liveportrait_onnx:/app/models/liveportrait_onnx:ro
       - ./data/backend/storage/joyvasa_models:/app/models/JoyVASA:ro
       - ./data/backend/storage/chinese-hubert-base:/app/models/chinese-hubert-base:ro
     environment:
