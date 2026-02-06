@@ -48,6 +48,16 @@ class Settings(BaseSettings):
         description="Use local MuseTalk service for lip-sync video generation"
     )
 
+    # LivePortrait + JoyVASA Service (audio-driven facial animation)
+    liveportrait_service_url: str = Field(
+        default=os.environ.get('LIVEPORTRAIT_SERVICE_URL', 'http://liveportrait:8004'),
+        description="LivePortrait + JoyVASA service URL for audio-driven facial animation"
+    )
+    lipsync_engine: str = Field(
+        default=os.environ.get('LIPSYNC_ENGINE', 'musetalk'),
+        description="Lip-sync engine to use: 'musetalk', 'liveportrait', or 'auto'"
+    )
+
     # Fallback behavior
     fallback_to_cloud: bool = Field(
         default=os.environ.get('FALLBACK_TO_CLOUD', 'true').lower() == 'true',
@@ -161,8 +171,18 @@ class Settings(BaseSettings):
         return {
             'use_local': self.should_use_local_lipsync,
             'local_url': self.musetalk_service_url,
+            'liveportrait_url': self.liveportrait_service_url,
+            'engine': self.get_lipsync_engine,
             'cloud_configured': bool(self.did_api_key),
             'fallback_enabled': self.should_fallback_to_cloud
         }
+
+    @property
+    def get_lipsync_engine(self) -> str:
+        """Get the configured lip-sync engine."""
+        env_value = os.environ.get('LIPSYNC_ENGINE', '').lower()
+        if env_value in ('musetalk', 'liveportrait', 'auto'):
+            return env_value
+        return self.lipsync_engine
 
 settings = Settings()

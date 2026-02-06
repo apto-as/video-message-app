@@ -51,6 +51,33 @@ services:
       - voice_network
     restart: unless-stopped
 
+  # LivePortrait + JoyVASA Service - Audio-driven facial animation
+  liveportrait:
+    build:
+      context: ./liveportrait_service
+    container_name: liveportrait_service
+    runtime: nvidia
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./data/backend/storage:/app/storage
+      - ./data/liveportrait/checkpoints:/app/models/liveportrait_onnx:ro
+      - ./data/backend/storage/joyvasa_models:/app/models/JoyVASA:ro
+      - ./data/backend/storage/chinese-hubert-base:/app/models/chinese-hubert-base:ro
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - LAZY_LOAD=true
+      - MAX_CONCURRENT_JOBS=2
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      - voice_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
   backend:
     build: ./backend
     container_name: voice_backend
@@ -68,8 +95,10 @@ services:
       - VOICEVOX_URL=http://voicevox:50021
       - QWEN_TTS_SERVICE_URL=http://qwen-tts:8002  # Qwen3-TTS voice cloning service
       - MUSETALK_SERVICE_URL=http://musetalk:8003  # MuseTalk lip-sync service
+      - LIVEPORTRAIT_SERVICE_URL=http://liveportrait:8004  # LivePortrait + JoyVASA service
       - USE_LOCAL_TTS=true  # Use local Qwen3-TTS for voice cloning
       - USE_LOCAL_LIPSYNC=true  # Use local MuseTalk for lip-sync
+      - LIPSYNC_ENGINE=${LIPSYNC_ENGINE:-musetalk}  # musetalk | liveportrait | auto
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     networks:
       - voice_network
@@ -77,6 +106,7 @@ services:
       - voicevox
       - qwen-tts
       - musetalk
+      - liveportrait
     restart: unless-stopped
 
   frontend:
