@@ -101,9 +101,11 @@ class EchoMimicClient:
             )
             if response.status_code == 200:
                 health_data = response.json()
-                self._service_available = health_data.get('status') == 'healthy'
+                # Accept both 'healthy' and 'degraded' (lazy loading mode)
+                status = health_data.get('status')
+                self._service_available = status in ('healthy', 'degraded')
                 if self._service_available:
-                    logger.info('EchoMimic Service is available')
+                    logger.info(f'EchoMimic Service is available (status: {status})')
                     # Log GPU info if available
                     if 'gpu' in health_data:
                         logger.info(f'EchoMimic GPU: {health_data["gpu"]}')
