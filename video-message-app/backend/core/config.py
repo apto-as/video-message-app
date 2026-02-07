@@ -53,9 +53,16 @@ class Settings(BaseSettings):
         default=os.environ.get('LIVEPORTRAIT_SERVICE_URL', 'http://liveportrait:8004'),
         description="LivePortrait + JoyVASA service URL for audio-driven facial animation"
     )
+
+    # EchoMimic Service (audio-driven portrait animation with blink + expressions)
+    echomimic_service_url: str = Field(
+        default=os.environ.get('ECHOMIMIC_SERVICE_URL', 'http://echomimic:8005'),
+        description="EchoMimic service URL for audio-driven portrait animation"
+    )
+
     lipsync_engine: str = Field(
         default=os.environ.get('LIPSYNC_ENGINE', 'musetalk'),
-        description="Lip-sync engine to use: 'musetalk', 'liveportrait', or 'auto'"
+        description="Lip-sync engine to use: 'musetalk', 'liveportrait', 'echomimic', or 'auto'"
     )
 
     # Fallback behavior
@@ -181,7 +188,7 @@ class Settings(BaseSettings):
     def get_lipsync_engine(self) -> str:
         """Get the configured lip-sync engine."""
         env_value = os.environ.get('LIPSYNC_ENGINE', '').lower()
-        if env_value in ('musetalk', 'liveportrait', 'auto'):
+        if env_value in ('musetalk', 'liveportrait', 'echomimic', 'auto'):
             return env_value
         return self.lipsync_engine
 

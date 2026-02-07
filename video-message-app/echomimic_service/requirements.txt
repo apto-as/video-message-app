@@ -1,0 +1,50 @@
+# EchoMimic Service Dependencies
+# Compatible with CUDA 11.8 and Python 3.11
+
+# PyTorch - CUDA 11.8
+# Note: Install via pip with --index-url https://download.pytorch.org/whl/cu118
+torch>=2.0.1,<=2.2.2
+torchaudio>=2.0.1,<=2.2.2
+torchvision>=0.15.1,<=0.17.2
+
+# Diffusers for Stable Diffusion components
+diffusers==0.24.0
+transformers>=4.36.0,<5.0.0
+accelerate>=0.25.0
+
+# Image processing
+Pillow>=10.0.0
+opencv-python-headless>=4.8.0
+
+# Face detection
+mediapipe>=0.10.0
+facenet-pytorch>=2.5.0
+
+# Audio processing
+librosa>=0.10.0
+soundfile>=0.12.0
+
+# FastAPI and web
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+aiofiles>=23.0.0
+httpx>=0.26.0
+
+# Data validation
+pydantic>=2.5.0
+
+# Utilities
+numpy>=1.24.0,<2.0.0
+scipy>=1.11.0
+einops>=0.7.0
+omegaconf>=2.3.0
+safetensors>=0.4.0
+huggingface-hub>=0.20.0
+
+# Video processing
+imageio>=2.33.0
+imageio-ffmpeg>=0.4.9
+
+# xformers for memory optimization (optional, CUDA only)
+# xformers>=0.0.23

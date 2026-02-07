@@ -78,6 +78,36 @@ services:
       retries: 3
     restart: unless-stopped
 
+  # EchoMimic Service - Audio-driven portrait animation (lip-sync + blink + expressions)
+  echomimic:
+    build:
+      context: ./echomimic_service
+    container_name: echomimic_service
+    runtime: nvidia
+    ports:
+      - "8005:8005"
+    volumes:
+      - ./data/backend/storage:/app/storage
+      - ./data/echomimic/models:/app/models:ro
+      - echomimic-cache:/app/cache
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - DEVICE=${DEVICE:-cuda}
+      - STORAGE_PATH=/app/storage
+      - MODELS_PATH=/app/models
+      - LAZY_LOAD=true
+      - MAX_CONCURRENT_JOBS=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ALLOWED_ORIGINS=http://localhost:55434,https://3.115.141.166
+    networks:
+      - voice_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
   backend:
     build: ./backend
     container_name: voice_backend
@@ -96,9 +126,10 @@ services:
       - QWEN_TTS_SERVICE_URL=http://qwen-tts:8002  # Qwen3-TTS voice cloning service
       - MUSETALK_SERVICE_URL=http://musetalk:8003  # MuseTalk lip-sync service
       - LIVEPORTRAIT_SERVICE_URL=http://liveportrait:8004  # LivePortrait + JoyVASA service
+      - ECHOMIMIC_SERVICE_URL=http://echomimic:8005  # EchoMimic audio-driven animation
       - USE_LOCAL_TTS=true  # Use local Qwen3-TTS for voice cloning
       - USE_LOCAL_LIPSYNC=true  # Use local MuseTalk for lip-sync
-      - LIPSYNC_ENGINE=${LIPSYNC_ENGINE:-musetalk}  # musetalk | liveportrait | auto
+      - LIPSYNC_ENGINE=${LIPSYNC_ENGINE:-musetalk}  # musetalk | liveportrait | echomimic | auto
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     networks:
       - voice_network
@@ -107,6 +138,7 @@ services:
       - qwen-tts
       - musetalk
       - liveportrait
+      - echomimic
     restart: unless-stopped
 
   frontend:
@@ -144,4 +176,5 @@ networks:
     driver: bridge
 
 volumes:
-  qwen3-models:   # Qwen3 TTS model cache volume
+  qwen3-models:      # Qwen3 TTS model cache volume
+  echomimic-cache:   # EchoMimic face detection cache
