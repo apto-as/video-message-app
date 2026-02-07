@@ -1,6 +1,6 @@
 """
 リップシンク動画生成 API ルーター
-MuseTalkを使用したリップシンク動画生成
+MuseTalk/EchoMimicを使用したリップシンク動画生成
 """
 
 import os
@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Tuple
 import logging
 
 from core.config import settings
@@ -20,6 +20,8 @@ STORAGE_DIR = Path(os.environ.get("STORAGE_PATH", "/app/storage"))
 # File size limits for shared volume reads (prevent DoS via oversized files)
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024   # 10 MB
 MAX_AUDIO_SIZE_BYTES = 50 * 1024 * 1024   # 50 MB
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_storage_path(storage_url: str, max_size_bytes: int = None) -> Path:
@@ -51,10 +53,11 @@ def _resolve_storage_path(storage_url: str, max_size_bytes: int = None) -> Path:
 
     return full_path
 
+
 # MuseTalk client (lazy loaded)
 _musetalk_client = None
 
-def get_musetalk_client():
+def _get_musetalk_client():
     """Get or initialize MuseTalk client singleton"""
     global _musetalk_client
     if _musetalk_client is None:
@@ -70,7 +73,95 @@ def get_musetalk_client():
             return None
     return _musetalk_client
 
-logger = logging.getLogger(__name__)
+
+# EchoMimic client (lazy loaded)
+_echomimic_client = None
+
+def _get_echomimic_client():
+    """Get or initialize EchoMimic client singleton"""
+    global _echomimic_client
+    if _echomimic_client is None:
+        try:
+            from services.echomimic_client import EchoMimicClient
+            _echomimic_client = EchoMimicClient()
+            logger.info("EchoMimicClient initialized")
+        except ImportError as e:
+            logger.warning(f"EchoMimicClient not available: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to initialize EchoMimicClient: {e}")
+            return None
+    return _echomimic_client
+
+
+async def _select_lipsync_engine() -> Tuple[str, object]:
+    """
+    Select the appropriate lip-sync engine based on configuration and availability.
+
+    Returns:
+        Tuple of (engine_name, client_instance)
+        engine_name: 'musetalk', 'echomimic', or 'liveportrait'
+        client_instance: The corresponding client object
+
+    Raises:
+        HTTPException: If no engine is available
+    """
+    configured_engine = settings.get_lipsync_engine
+
+    if configured_engine == 'musetalk':
+        client = _get_musetalk_client()
+        if client and await client.check_service_health():
+            return ('musetalk', client)
+        raise HTTPException(status_code=503, detail="MuseTalkサービスが利用できません")
+
+    elif configured_engine == 'echomimic':
+        client = _get_echomimic_client()
+        if client and await client.check_service_health():
+            return ('echomimic', client)
+        raise HTTPException(status_code=503, detail="EchoMimicサービスが利用できません")
+
+    elif configured_engine == 'liveportrait':
+        # LivePortrait is not yet implemented in this router
+        raise HTTPException(status_code=501, detail="LivePortraitエンジンは未実装です")
+
+    elif configured_engine == 'auto':
+        # Try engines in order of preference: MuseTalk -> EchoMimic
+        # MuseTalk first (faster, lower VRAM)
+        musetalk = _get_musetalk_client()
+        if musetalk:
+            try:
+                if await musetalk.check_service_health():
+                    logger.info("Auto-selected engine: MuseTalk")
+                    return ('musetalk', musetalk)
+            except Exception as e:
+                logger.warning(f"MuseTalk health check failed: {e}")
+
+        # EchoMimic fallback (higher quality, more VRAM)
+        echomimic = _get_echomimic_client()
+        if echomimic:
+            try:
+                if await echomimic.check_service_health():
+                    logger.info("Auto-selected engine: EchoMimic")
+                    return ('echomimic', echomimic)
+            except Exception as e:
+                logger.warning(f"EchoMimic health check failed: {e}")
+
+        raise HTTPException(
+            status_code=503,
+            detail="利用可能なリップシンクエンジンがありません"
+        )
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown lip-sync engine: {configured_engine}"
+        )
+
+
+# Keep the old function name for backward compatibility
+def get_musetalk_client():
+    """Backward compatibility wrapper for _get_musetalk_client"""
+    return _get_musetalk_client()
 
 router = APIRouter()
 
@@ -106,7 +197,7 @@ class VideoGenerationResponse(BaseModel):
 @router.post("/generate-video", response_model=VideoGenerationResponse)
 async def generate_video(request: VideoGenerationRequest):
     """
-    MuseTalkを使用して動画を生成
+    リップシンク動画を生成（MuseTalk/EchoMimic自動選択）
 
     Args:
         request: 動画生成リクエスト
@@ -115,12 +206,9 @@ async def generate_video(request: VideoGenerationRequest):
         生成された動画の情報
     """
     try:
-        musetalk = get_musetalk_client()
-        if musetalk is None:
-            raise HTTPException(status_code=503, detail="MuseTalkサービスが利用できません")
-
-        if not await musetalk.check_service_health():
-            raise HTTPException(status_code=503, detail="MuseTalkサービスが応答していません")
+        # Select the appropriate lip-sync engine
+        engine_name, client = await _select_lipsync_engine()
+        logger.info(f"Using lip-sync engine: {engine_name}")
 
         # Read uploaded files from shared Docker volume (with size limits)
         try:
@@ -132,7 +220,7 @@ async def generate_video(request: VideoGenerationRequest):
         audio_data = audio_path.read_bytes()
         image_data = image_path.read_bytes()
 
-        # Smart upper-body crop for optimal MuseTalk/LivePortrait input
+        # Smart upper-body crop for optimal MuseTalk/EchoMimic/LivePortrait input
         if settings.upper_body_crop_enabled:
             from services.upper_body_cropper import get_upper_body_cropper
             cropper = get_upper_body_cropper(
@@ -146,17 +234,29 @@ async def generate_video(request: VideoGenerationRequest):
                 logger.warning(f"Upper-body crop failed, using original image: {e}")
 
         logger.info(
-            f"MuseTalk動画生成開始: audio={audio_path.name} ({len(audio_data)} bytes), "
+            f"{engine_name}動画生成開始: audio={audio_path.name} ({len(audio_data)} bytes), "
             f"image={image_path.name} ({len(image_data)} bytes)"
         )
 
-        result = await musetalk.create_talk_video(
-            audio_data=audio_data,
-            image_data=image_data,
-            audio_filename=audio_path.name,
-            image_filename=image_path.name,
-            wait_for_completion=True
-        )
+        # Generate video using the selected engine
+        if engine_name == 'musetalk':
+            result = await client.create_talk_video(
+                audio_data=audio_data,
+                image_data=image_data,
+                audio_filename=audio_path.name,
+                image_filename=image_path.name,
+                wait_for_completion=True
+            )
+        elif engine_name == 'echomimic':
+            result = await client.create_video(
+                audio_data=audio_data,
+                image_data=image_data,
+                audio_filename=audio_path.name,
+                image_filename=image_path.name,
+                wait_for_completion=True
+            )
+        else:
+            raise HTTPException(status_code=501, detail=f"Engine {engine_name} not implemented")
 
         # Transform result_url to backend-served path
         result_url = None
@@ -271,17 +371,20 @@ async def upload_audio(file: UploadFile = File(...)):
 @router.get("/health")
 async def health_check():
     """
-    MuseTalkリップシンクサービスのヘルスチェック
+    リップシンクサービス（MuseTalk/EchoMimic）のヘルスチェック
 
     Returns:
         サービスの状態
     """
+    configured_engine = settings.get_lipsync_engine
     result = {
         "status": "healthy",
-        "primary_service": "musetalk"
+        "configured_engine": configured_engine,
+        "available_engines": []
     }
 
-    musetalk = get_musetalk_client()
+    # Check MuseTalk
+    musetalk = _get_musetalk_client()
     if musetalk is not None:
         try:
             musetalk_healthy = await musetalk.check_service_health()
@@ -289,17 +392,42 @@ async def health_check():
                 "available": musetalk_healthy,
                 "service_url": musetalk.base_url
             }
-            if not musetalk_healthy:
-                result["status"] = "degraded"
+            if musetalk_healthy:
+                result["available_engines"].append("musetalk")
         except Exception as e:
             result["musetalk"] = {
                 "available": False,
                 "error": str(e)
             }
-            result["status"] = "degraded"
     else:
         result["musetalk"] = {"available": False, "error": "Client not initialized"}
-        result["status"] = "degraded"
+
+    # Check EchoMimic
+    echomimic = _get_echomimic_client()
+    if echomimic is not None:
+        try:
+            echomimic_healthy = await echomimic.check_service_health()
+            result["echomimic"] = {
+                "available": echomimic_healthy,
+                "service_url": echomimic.base_url
+            }
+            if echomimic_healthy:
+                result["available_engines"].append("echomimic")
+        except Exception as e:
+            result["echomimic"] = {
+                "available": False,
+                "error": str(e)
+            }
+    else:
+        result["echomimic"] = {"available": False, "error": "Client not initialized"}
+
+    # Determine overall status
+    if not result["available_engines"]:
+        result["status"] = "unhealthy"
+    elif configured_engine != 'auto':
+        # Check if the configured engine is available
+        if configured_engine not in result["available_engines"]:
+            result["status"] = "degraded"
 
     return result
 
