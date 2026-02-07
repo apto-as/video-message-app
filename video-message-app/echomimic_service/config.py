@@ -34,7 +34,9 @@ class Config:
     REFERENCE_UNET = ECHOMIMIC_PRETRAINED_DIR / "reference_unet.pth"
     FACE_LOCATOR = ECHOMIMIC_PRETRAINED_DIR / "face_locator.pth"
     MOTION_MODULE = ECHOMIMIC_PRETRAINED_DIR / "motion_module.pth"
-    AUDIO_PROJ = ECHOMIMIC_PRETRAINED_DIR / "audio_projection.pth"
+    # Audio processor uses Whisper instead of audio_projection
+    AUDIO_PROCESSOR_DIR = ECHOMIMIC_PRETRAINED_DIR / "audio_processor"
+    WHISPER_MODEL = AUDIO_PROCESSOR_DIR / "whisper_tiny.pt"
 
     # Base model paths (Stable Diffusion + Audio encoder)
     SD_VAE_DIR = MODELS_DIR / "sd-vae-ft-mse"
@@ -108,7 +110,7 @@ class Config:
             "reference_unet": cls.REFERENCE_UNET.exists(),
             "face_locator": cls.FACE_LOCATOR.exists(),
             "motion_module": cls.MOTION_MODULE.exists(),
-            "audio_projection": cls.AUDIO_PROJ.exists(),
+            "whisper_model": cls.WHISPER_MODEL.exists(),
             # Base models
             "sd_vae": (cls.SD_VAE_DIR / "diffusion_pytorch_model.safetensors").exists() or \
                       (cls.SD_VAE_DIR / "diffusion_pytorch_model.bin").exists(),
