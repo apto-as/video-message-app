@@ -2,7 +2,7 @@
 # Audio-driven portrait animation service
 
 # Base image with CUDA 11.8 and cuDNN 8
-FROM nvidia/cuda:11.8-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
 # Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
