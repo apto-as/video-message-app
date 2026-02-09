@@ -40,7 +40,11 @@ scipy>=1.11.0
 einops>=0.7.0
 omegaconf>=2.3.0
 safetensors>=0.4.0
-huggingface-hub>=0.20.0
+# Pin huggingface-hub for diffusers 0.24.0 compatibility (cached_download removed in 0.22.0)
+huggingface-hub>=0.20.0,<0.22.0
+
+# FFmpeg wrapper for whisper audio processing
+ffmpeg-python>=0.2.0
 
 # Video processing
 imageio>=2.33.0
