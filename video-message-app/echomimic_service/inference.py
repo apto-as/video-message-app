@@ -448,7 +448,8 @@ class EchoMimicInference:
                 face_img = cv2.resize(face_img, (width, height))
                 face_mask = cv2.resize(face_mask, (width, height))
             else:
-                xyxy = select_bbox[:4]
+                # Convert to numpy array first (MTCNN returns float list/tensor)
+                xyxy = np.array(select_bbox[:4])
                 xyxy = np.round(xyxy).astype('int')
                 rb, re, cb, ce = xyxy[1], xyxy[3], xyxy[0], xyxy[2]
 
