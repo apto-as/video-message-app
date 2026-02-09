@@ -4,7 +4,7 @@ EchoMimic Inference Engine
 This module provides the core inference logic for EchoMimic audio-driven
 portrait animation. It handles model loading, video generation, and VRAM management.
 
-TODO: Integrate actual EchoMimic pipeline from https://github.com/BadToBest/EchoMimic
+Reference: https://github.com/BadToBest/EchoMimic
 """
 import asyncio
 import logging
@@ -20,11 +20,74 @@ from typing import Dict, Optional, Tuple, Callable
 import cv2
 import numpy as np
 import torch
+from PIL import Image
+from diffusers import AutoencoderKL, DDIMScheduler
+from facenet_pytorch import MTCNN
+from moviepy.editor import VideoFileClip, AudioFileClip
 
 from config import Config
 from models import AnimationParams, JobData, JobStatus
 
+# EchoMimic imports
+from src.models.unet_2d_condition import UNet2DConditionModel
+from src.models.unet_3d_echo import EchoUNet3DConditionModel
+from src.models.whisper.audio2feature import load_audio_model
+from src.models.face_locator import FaceLocator
+from src.pipelines.pipeline_echo_mimic import Audio2VideoPipeline
+from src.utils.util import save_videos_grid, crop_and_pad
+
 logger = logging.getLogger(__name__)
+
+# Inference configuration (from configs/inference/inference_v2.yaml)
+INFER_CONFIG = {
+    "unet_additional_kwargs": {
+        "use_inflated_groupnorm": True,
+        "unet_use_cross_frame_attention": False,
+        "unet_use_temporal_attention": False,
+        "use_motion_module": True,
+        "cross_attention_dim": 384,
+        "motion_module_resolutions": [1, 2, 4, 8],
+        "motion_module_mid_block": True,
+        "motion_module_decoder_only": False,
+        "motion_module_type": "Vanilla",
+        "motion_module_kwargs": {
+            "num_attention_heads": 8,
+            "num_transformer_block": 1,
+            "attention_block_types": ["Temporal_Self", "Temporal_Self"],
+            "temporal_position_encoding": True,
+            "temporal_position_encoding_max_len": 32,
+            "temporal_attention_dim_div": 1,
+        }
+    },
+    "noise_scheduler_kwargs": {
+        "beta_start": 0.00085,
+        "beta_end": 0.012,
+        "beta_schedule": "linear",
+        "clip_sample": False,
+        "steps_offset": 1,
+        "prediction_type": "v_prediction",
+        "rescale_betas_zero_snr": True,
+        "timestep_spacing": "trailing",
+    }
+}
+
+
+def select_face(det_bboxes, probs):
+    """Select the largest face with probability above 0.8"""
+    if det_bboxes is None or probs is None:
+        return None
+    filtered_bboxes = []
+    for bbox_i in range(len(det_bboxes)):
+        if probs[bbox_i] > 0.8:
+            filtered_bboxes.append(det_bboxes[bbox_i])
+    if len(filtered_bboxes) == 0:
+        return None
+    sorted_bboxes = sorted(
+        filtered_bboxes,
+        key=lambda x: (x[3] - x[1]) * (x[2] - x[0]),
+        reverse=True
+    )
+    return sorted_bboxes[0]
 
 
 class EchoMimicInference:
@@ -42,17 +105,20 @@ class EchoMimicInference:
         self.last_used = time.time()
         self._lock = threading.Lock()
 
-        # Model components (to be loaded)
-        self.vae = None
-        self.audio_encoder = None
-        self.image_encoder = None
-        self.denoising_unet = None
-        self.reference_unet = None
-        self.face_locator = None
-        self.motion_module = None
-        self.audio_projection = None
+        # Determine weight dtype
+        if Config.MODEL_PRECISION == "fp16":
+            self.weight_dtype = torch.float16
+        else:
+            self.weight_dtype = torch.float32
 
-        # Pipeline state
+        # Model components
+        self.vae = None
+        self.reference_unet = None
+        self.denoising_unet = None
+        self.face_locator = None
+        self.audio_processor = None
+        self.face_detector = None
+        self.scheduler = None
         self.pipeline = None
         self.model_loaded = False
 
@@ -71,20 +137,19 @@ class EchoMimicInference:
         """
         logger.info("Using pre-loaded models")
 
-        # TODO: Assign pre-loaded model components
-        # self.vae = models.get('vae')
-        # self.audio_encoder = models.get('audio_encoder')
-        # self.image_encoder = models.get('image_encoder')
-        # self.denoising_unet = models.get('denoising_unet')
-        # self.reference_unet = models.get('reference_unet')
-        # self.face_locator = models.get('face_locator')
-        # self.motion_module = models.get('motion_module')
-        # self.audio_projection = models.get('audio_projection')
-        # self.pipeline = models.get('pipeline')
+        self.vae = models.get('vae')
+        self.reference_unet = models.get('reference_unet')
+        self.denoising_unet = models.get('denoising_unet')
+        self.face_locator = models.get('face_locator')
+        self.audio_processor = models.get('audio_processor')
+        self.face_detector = models.get('face_detector')
+        self.scheduler = models.get('scheduler')
+        self.pipeline = models.get('pipeline')
 
-        self.model_loaded = True
-        logger.info("Pre-loaded models ready for inference")
-        self._log_vram_usage()
+        if self.pipeline is not None:
+            self.model_loaded = True
+            logger.info("Pre-loaded models ready for inference")
+            self._log_vram_usage()
 
     def load_models(self) -> bool:
         """
@@ -103,35 +168,110 @@ class EchoMimicInference:
 
             try:
                 logger.info("Loading EchoMimic models...")
-
-                # TODO: Implement actual EchoMimic model loading
-                # Reference: https://github.com/BadToBest/EchoMimic
-                #
-                # Expected loading sequence:
-                # 1. Load VAE from SD-VAE-ft-mse
-                # 2. Load audio encoder (Wav2Vec2)
-                # 3. Load image encoder (SD Image Variations)
-                # 4. Load EchoMimic-specific modules:
-                #    - denoising_unet.pth
-                #    - reference_unet.pth
-                #    - face_locator.pth
-                #    - motion_module.pth
-                #    - audio_projection.pth
-                # 5. Create inference pipeline
-
-                # Placeholder: Simulate model loading
-                logger.warning("EchoMimic model loading not implemented - using stub")
+                device = self.device
+                weight_dtype = self.weight_dtype
 
                 # Check if model files exist
                 file_status = Config.check_model_files()
                 missing = [k for k, v in file_status.items() if not v]
                 if missing:
-                    logger.warning(f"Missing model files: {missing}")
+                    logger.error(f"Missing model files: {missing}")
+                    return False
+
+                # 1. Load VAE
+                logger.info("Loading VAE...")
+                self.vae = AutoencoderKL.from_pretrained(
+                    str(Config.SD_VAE_DIR),
+                ).to(device, dtype=weight_dtype)
+
+                # 2. Load Reference UNet (2D)
+                logger.info("Loading Reference UNet...")
+                self.reference_unet = UNet2DConditionModel.from_pretrained(
+                    str(Config.IMAGE_ENCODER_DIR),
+                    subfolder="unet",
+                ).to(dtype=weight_dtype, device=device)
+                self.reference_unet.load_state_dict(
+                    torch.load(str(Config.REFERENCE_UNET), map_location="cpu"),
+                )
+
+                # 3. Load Denoising UNet (3D with Motion Module)
+                logger.info("Loading Denoising UNet with Motion Module...")
+                motion_module_path = str(Config.MOTION_MODULE)
+                if Config.MOTION_MODULE.exists():
+                    self.denoising_unet = EchoUNet3DConditionModel.from_pretrained_2d(
+                        str(Config.IMAGE_ENCODER_DIR),
+                        motion_module_path,
+                        subfolder="unet",
+                        unet_additional_kwargs=INFER_CONFIG["unet_additional_kwargs"],
+                    ).to(dtype=weight_dtype, device=device)
+                else:
+                    logger.warning("Motion module not found, using stage1 only")
+                    self.denoising_unet = EchoUNet3DConditionModel.from_pretrained_2d(
+                        str(Config.IMAGE_ENCODER_DIR),
+                        "",
+                        subfolder="unet",
+                        unet_additional_kwargs={
+                            "use_motion_module": False,
+                            "unet_use_temporal_attention": False,
+                            "cross_attention_dim": INFER_CONFIG["unet_additional_kwargs"]["cross_attention_dim"]
+                        }
+                    ).to(dtype=weight_dtype, device=device)
+
+                self.denoising_unet.load_state_dict(
+                    torch.load(str(Config.DENOISING_UNET), map_location="cpu"),
+                    strict=False
+                )
+
+                # 4. Load Face Locator
+                logger.info("Loading Face Locator...")
+                self.face_locator = FaceLocator(
+                    320,
+                    conditioning_channels=1,
+                    block_out_channels=(16, 32, 96, 256)
+                ).to(dtype=weight_dtype, device=device)
+                self.face_locator.load_state_dict(
+                    torch.load(str(Config.FACE_LOCATOR), map_location="cpu")
+                )
+
+                # 5. Load Audio Processor (Whisper)
+                logger.info("Loading Audio Processor...")
+                self.audio_processor = load_audio_model(
+                    model_path=str(Config.WHISPER_MODEL),
+                    device=device
+                )
+
+                # 6. Load Face Detector (MTCNN)
+                logger.info("Loading Face Detector...")
+                self.face_detector = MTCNN(
+                    image_size=320,
+                    margin=0,
+                    min_face_size=20,
+                    thresholds=[0.6, 0.7, 0.7],
+                    factor=0.709,
+                    post_process=True,
+                    device=device
+                )
+
+                # 7. Create Scheduler
+                logger.info("Creating Scheduler...")
+                self.scheduler = DDIMScheduler(**INFER_CONFIG["noise_scheduler_kwargs"])
+
+                # 8. Create Pipeline
+                logger.info("Creating Pipeline...")
+                self.pipeline = Audio2VideoPipeline(
+                    vae=self.vae,
+                    reference_unet=self.reference_unet,
+                    denoising_unet=self.denoising_unet,
+                    audio_guider=self.audio_processor,
+                    face_locator=self.face_locator,
+                    scheduler=self.scheduler,
+                )
+                self.pipeline = self.pipeline.to(device, dtype=weight_dtype)
 
                 self.model_loaded = True
                 self.last_used = time.time()
 
-                logger.info("EchoMimic models loaded successfully (stub)")
+                logger.info("EchoMimic models loaded successfully!")
                 self._log_vram_usage()
                 return True
 
@@ -149,15 +289,13 @@ class EchoMimicInference:
         with self._lock:
             logger.info("Unloading EchoMimic models...")
 
-            # TODO: Implement model unloading
             self.vae = None
-            self.audio_encoder = None
-            self.image_encoder = None
-            self.denoising_unet = None
             self.reference_unet = None
+            self.denoising_unet = None
             self.face_locator = None
-            self.motion_module = None
-            self.audio_projection = None
+            self.audio_processor = None
+            self.face_detector = None
+            self.scheduler = None
             self.pipeline = None
 
             if self.device == "cuda":
@@ -187,13 +325,12 @@ class EchoMimicInference:
         """Get status of each model component"""
         return {
             "vae": self.vae is not None,
-            "audio_encoder": self.audio_encoder is not None,
-            "image_encoder": self.image_encoder is not None,
-            "denoising_unet": self.denoising_unet is not None,
             "reference_unet": self.reference_unet is not None,
+            "denoising_unet": self.denoising_unet is not None,
             "face_locator": self.face_locator is not None,
-            "motion_module": self.motion_module is not None,
-            "audio_projection": self.audio_projection is not None,
+            "audio_processor": self.audio_processor is not None,
+            "face_detector": self.face_detector is not None,
+            "scheduler": self.scheduler is not None,
             "pipeline": self.pipeline is not None,
             "fully_loaded": self.model_loaded,
         }
@@ -263,67 +400,137 @@ class EchoMimicInference:
         progress_callback: Optional[Callable[[float, str], None]] = None
     ) -> str:
         """
-        Synchronous video generation.
-
-        TODO: Implement actual EchoMimic inference pipeline
-        Reference: https://github.com/BadToBest/EchoMimic/blob/main/infer.py
+        Synchronous video generation using EchoMimic pipeline.
         """
         temp_dir = Path(tempfile.mkdtemp(dir=Config.TEMP_DIR))
         try:
             logger.info(f"Starting video generation: image={image_path}, audio={audio_path}")
-            logger.info(f"Parameters: pose={animation_params.pose_weight}, "
-                       f"face={animation_params.face_weight}, lip={animation_params.lip_weight}, "
-                       f"cfg={cfg_scale}, steps={num_inference_steps}")
+            logger.info(f"Parameters: cfg={cfg_scale}, steps={num_inference_steps}")
 
             if progress_callback:
-                progress_callback(0.1, "Loading source image")
+                progress_callback(0.05, "Loading source image")
+
+            # Configuration
+            width = Config.OUTPUT_WIDTH
+            height = Config.OUTPUT_HEIGHT
+            fps = Config.OUTPUT_FPS
+            context_frames = Config.CONTEXT_FRAMES
+            context_overlap = Config.CONTEXT_OVERLAP
+            facemusk_dilation_ratio = 0.1
+            facecrop_dilation_ratio = 0.5
+            seed = 420
+            sample_rate = 16000
+            max_frames = 1200  # Max frames per generation
+
+            if progress_callback:
+                progress_callback(0.1, "Detecting face")
 
             # Read source image
-            source_image = cv2.imread(image_path)
-            if source_image is None:
+            face_img = cv2.imread(image_path)
+            if face_img is None:
                 raise ValueError(f"Could not read image: {image_path}")
 
-            # Resize to output dimensions
-            source_image = cv2.resize(
-                source_image,
-                (Config.OUTPUT_WIDTH, Config.OUTPUT_HEIGHT),
-                interpolation=cv2.INTER_LANCZOS4
+            # Detect face
+            det_bboxes, probs = self.face_detector.detect(face_img)
+            select_bbox = select_face(det_bboxes, probs)
+
+            # Create face mask
+            face_mask = np.zeros((face_img.shape[0], face_img.shape[1])).astype('uint8')
+
+            if select_bbox is None:
+                logger.warning("No face detected, using full image")
+                face_mask[:, :] = 255
+                # Resize to output dimensions
+                face_img = cv2.resize(face_img, (width, height))
+                face_mask = cv2.resize(face_mask, (width, height))
+            else:
+                xyxy = select_bbox[:4]
+                xyxy = np.round(xyxy).astype('int')
+                rb, re, cb, ce = xyxy[1], xyxy[3], xyxy[0], xyxy[2]
+
+                # Face mask dilation
+                r_pad = int((re - rb) * facemusk_dilation_ratio)
+                c_pad = int((ce - cb) * facecrop_dilation_ratio)
+                face_mask[rb - r_pad : re + r_pad, cb - c_pad : ce + c_pad] = 255
+
+                # Face crop
+                r_pad_crop = int((re - rb) * facecrop_dilation_ratio)
+                c_pad_crop = int((ce - cb) * facecrop_dilation_ratio)
+                crop_rect = [
+                    max(0, cb - c_pad_crop),
+                    max(0, rb - r_pad_crop),
+                    min(ce + c_pad_crop, face_img.shape[1]),
+                    min(re + r_pad_crop, face_img.shape[0])
+                ]
+                logger.info(f"Face crop rect: {crop_rect}")
+
+                face_img, _ = crop_and_pad(face_img, crop_rect)
+                face_mask, _ = crop_and_pad(face_mask, crop_rect)
+                face_img = cv2.resize(face_img, (width, height))
+                face_mask = cv2.resize(face_mask, (width, height))
+
+            if progress_callback:
+                progress_callback(0.2, "Preparing tensors")
+
+            # Convert to PIL and tensor
+            ref_image_pil = Image.fromarray(face_img[:, :, [2, 1, 0]])  # BGR to RGB
+            face_mask_tensor = torch.Tensor(face_mask).to(
+                dtype=self.weight_dtype,
+                device=self.device
+            ).unsqueeze(0).unsqueeze(0).unsqueeze(0) / 255.0
+
+            # Set random seed
+            generator = torch.manual_seed(seed)
+
+            if progress_callback:
+                progress_callback(0.3, "Running diffusion pipeline")
+
+            # Run pipeline
+            logger.info("Starting diffusion pipeline...")
+            video = self.pipeline(
+                ref_image_pil,
+                audio_path,
+                face_mask_tensor,
+                width,
+                height,
+                max_frames,
+                num_inference_steps,
+                cfg_scale,
+                generator=generator,
+                audio_sample_rate=sample_rate,
+                context_frames=context_frames,
+                fps=fps,
+                context_overlap=context_overlap
+            ).videos
+
+            if progress_callback:
+                progress_callback(0.8, "Saving video")
+
+            # Save video (without audio first)
+            temp_video_path = str(temp_dir / "temp_video.mp4")
+            save_videos_grid(
+                video,
+                temp_video_path,
+                n_rows=1,
+                fps=fps,
             )
 
             if progress_callback:
-                progress_callback(0.2, "Processing audio")
+                progress_callback(0.9, "Adding audio")
 
-            # TODO: Implement actual EchoMimic pipeline
-            # Expected steps:
-            # 1. Extract audio features using Wav2Vec2
-            # 2. Extract face features from image
-            # 3. Generate motion sequences
-            # 4. Run diffusion with motion conditioning
-            # 5. Decode latents to video frames
-
-            # Placeholder: Generate static video from image
-            logger.warning("EchoMimic inference not implemented - generating placeholder video")
-
-            if progress_callback:
-                progress_callback(0.4, "Generating animation frames")
-
-            # Get audio duration for frame count
-            import librosa
-            audio_duration = librosa.get_duration(path=audio_path)
-            num_frames = int(audio_duration * Config.OUTPUT_FPS)
-            num_frames = max(num_frames, 25)  # Minimum 1 second
-
-            if progress_callback:
-                progress_callback(0.6, f"Rendering {num_frames} frames")
-
-            # Generate placeholder frames (static image)
-            frames = [source_image] * num_frames
-
-            if progress_callback:
-                progress_callback(0.8, "Encoding video")
-
-            # Write video
-            self._write_video(frames, audio_path, output_path)
+            # Merge with audio
+            video_clip = VideoFileClip(temp_video_path)
+            audio_clip = AudioFileClip(audio_path)
+            video_clip = video_clip.set_audio(audio_clip)
+            video_clip.write_videofile(
+                output_path,
+                codec="libx264",
+                audio_codec="aac",
+                verbose=False,
+                logger=None
+            )
+            video_clip.close()
+            audio_clip.close()
 
             if progress_callback:
                 progress_callback(1.0, "Complete")
@@ -334,50 +541,6 @@ class EchoMimicInference:
         finally:
             # Cleanup temp directory
             shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def _write_video(
-        self,
-        frames: list,
-        audio_path: str,
-        output_path: str
-    ):
-        """Write frames and audio to video file"""
-        if not frames:
-            raise ValueError("No frames to write")
-
-        # Write frames to temp video
-        height, width = frames[0].shape[:2]
-        temp_video = Path(output_path).with_suffix('.temp.mp4')
-
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        writer = cv2.VideoWriter(
-            str(temp_video),
-            fourcc,
-            Config.OUTPUT_FPS,
-            (width, height)
-        )
-
-        for frame in frames:
-            writer.write(frame)
-        writer.release()
-
-        # Merge with audio using ffmpeg
-        cmd = [
-            'ffmpeg', '-y',
-            '-i', str(temp_video),
-            '-i', audio_path,
-            '-c:v', Config.VIDEO_CODEC,
-            '-c:a', Config.AUDIO_CODEC,
-            '-shortest',
-            '-preset', 'fast',
-            '-crf', '23',
-            output_path
-        ]
-
-        try:
-            subprocess.run(cmd, check=True, capture_output=True)
-        finally:
-            temp_video.unlink(missing_ok=True)
 
 
 class JobQueue:

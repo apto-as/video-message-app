@@ -45,6 +45,8 @@ huggingface-hub>=0.20.0
 # Video processing
 imageio>=2.33.0
 imageio-ffmpeg>=0.4.9
+moviepy>=1.0.3
+av>=11.0.0
 
 # xformers for memory optimization (optional, CUDA only)
 # xformers>=0.0.23
