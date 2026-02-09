@@ -44,7 +44,7 @@ class EchoMimicClient:
 
     # Polling configuration
     POLL_INTERVAL_SECONDS = 3.0
-    MAX_POLL_ATTEMPTS = 120  # 6 minutes with 3s interval
+    MAX_POLL_ATTEMPTS = 300  # 15 minutes with 3s interval (EchoMimic diffusion is slow)
 
     # Default generation parameters
     DEFAULT_POSE_WEIGHT = 1.0
