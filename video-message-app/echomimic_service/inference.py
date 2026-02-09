@@ -23,7 +23,11 @@ import torch
 from PIL import Image
 from diffusers import AutoencoderKL, DDIMScheduler
 from facenet_pytorch import MTCNN
-from moviepy.editor import VideoFileClip, AudioFileClip
+# moviepy 2.x compatibility
+try:
+    from moviepy.editor import VideoFileClip, AudioFileClip
+except ImportError:
+    from moviepy import VideoFileClip, AudioFileClip
 
 from config import Config
 from models import AnimationParams, JobData, JobStatus
