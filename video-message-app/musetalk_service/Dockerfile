@@ -87,13 +87,15 @@ RUN python -m pip install --no-cache-dir --no-build-isolation openai-whisper==20
 # Verify PyTorch is available before MMLab installation
 RUN python -c "import torch; print(f'PyTorch {torch.__version__} installed, CUDA: {torch.cuda.is_available()}')"
 
-# Install MMLab packages required by MuseTalk (mmpose, mmcv, mmdet)
-# Download pre-built mmcv wheel directly (avoids pip falling back to source build)
-# Wheel: mmcv-2.1.0-cp311-cp311-manylinux1_x86_64.whl for Python 3.11 + CUDA 11.8 + torch 2.1.0
+# Install MMLab packages required by MuseTalk
+# Step 1: Download and install mmcv from pre-built wheel (avoids C++17 compilation issues)
+# Step 2: Install mmdet without triggering mmcv reinstall (mmcv is already installed)
 RUN python -m pip install --no-cache-dir -U openmim && \
     python -m mim install mmengine && \
-    python -m pip install --no-cache-dir https://download.openmmlab.com/mmcv/dist/cu118/torch2.1.0/mmcv-2.1.0-cp311-cp311-manylinux1_x86_64.whl && \
-    python -m mim install "mmdet==3.1.0" && \
+    python -m pip install --no-cache-dir --no-build-isolation https://download.openmmlab.com/mmcv/dist/cu118/torch2.1.0/mmcv-2.1.0-cp311-cp311-manylinux1_x86_64.whl
+
+# Install mmdet after mmcv (separate layer to avoid mmcv reinstall)
+RUN python -m mim install "mmdet==3.1.0" && \
     python -m pip install --no-cache-dir "mmpose==1.1.0" --no-deps && \
     python -m pip install --no-cache-dir xtcocotools json_tricks munkres
 
