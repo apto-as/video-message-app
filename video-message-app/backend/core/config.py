@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import Field
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import os
 
 class Settings(BaseSettings):
@@ -109,6 +109,36 @@ class Settings(BaseSettings):
         description="Device for inpainting model ('cuda', 'cpu', or None for auto-detect)"
     )
 
+    # Blink animation settings (post-processing for MuseTalk)
+    blink_enabled: bool = Field(
+        default=True,
+        description="Enable blink animation post-processing for lip-synced videos"
+    )
+    blink_interval_min: float = Field(
+        default=3.0,
+        ge=1.0,
+        le=10.0,
+        description="Minimum seconds between blinks"
+    )
+    blink_interval_max: float = Field(
+        default=5.0,
+        ge=2.0,
+        le=15.0,
+        description="Maximum seconds between blinks"
+    )
+    blink_duration_min: float = Field(
+        default=0.15,
+        ge=0.05,
+        le=0.5,
+        description="Minimum blink duration in seconds"
+    )
+    blink_duration_max: float = Field(
+        default=0.30,
+        ge=0.1,
+        le=1.0,
+        description="Maximum blink duration in seconds"
+    )
+
     class Config:
         env_file = ".env"
         extra = "ignore"  # 追加の環境変数を許可
@@ -191,5 +221,59 @@ class Settings(BaseSettings):
         if env_value in ('musetalk', 'liveportrait', 'echomimic', 'auto'):
             return env_value
         return self.lipsync_engine
+
+    # =========================================================================
+    # Blink Animation Properties
+    # =========================================================================
+
+    @property
+    def is_blink_enabled(self) -> bool:
+        """Check if blink animation is enabled."""
+        env_value = os.environ.get('BLINK_ENABLED', '').lower()
+        if env_value in ('true', '1', 'yes'):
+            return True
+        elif env_value in ('false', '0', 'no'):
+            return False
+        return self.blink_enabled
+
+    @property
+    def get_blink_interval_range(self) -> Tuple[float, float]:
+        """Get blink interval range (min, max) in seconds."""
+        min_val = self.blink_interval_min
+        max_val = self.blink_interval_max
+        # Try to get from environment
+        env_min = os.environ.get('BLINK_INTERVAL_MIN')
+        env_max = os.environ.get('BLINK_INTERVAL_MAX')
+        if env_min:
+            try:
+                min_val = float(env_min)
+            except ValueError:
+                pass
+        if env_max:
+            try:
+                max_val = float(env_max)
+            except ValueError:
+                pass
+        return (min_val, max_val)
+
+    @property
+    def get_blink_duration_range(self) -> Tuple[float, float]:
+        """Get blink duration range (min, max) in seconds."""
+        min_val = self.blink_duration_min
+        max_val = self.blink_duration_max
+        # Try to get from environment
+        env_min = os.environ.get('BLINK_DURATION_MIN')
+        env_max = os.environ.get('BLINK_DURATION_MAX')
+        if env_min:
+            try:
+                min_val = float(env_min)
+            except ValueError:
+                pass
+        if env_max:
+            try:
+                max_val = float(env_max)
+            except ValueError:
+                pass
+        return (min_val, max_val)
 
 settings = Settings()

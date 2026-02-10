@@ -166,6 +166,70 @@ def get_musetalk_client():
 router = APIRouter()
 
 
+async def _apply_blink_postprocessing(result: dict, audio_path: Path) -> dict:
+    """
+    Apply blink animation to the generated video.
+
+    Args:
+        result: The video generation result containing result_url
+        audio_path: Path to the original audio file
+
+    Returns:
+        Updated result dict with blinking video
+    """
+    import asyncio
+
+    try:
+        from services.blink_processor import get_blink_processor
+        from services.video_utils import read_video_frames, write_video_frames
+
+        # Get the generated video path
+        video_url = result.get("result_url", "")
+        if not video_url:
+            return result
+
+        # Resolve video path from storage URL
+        video_path = _resolve_storage_path(video_url)
+
+        logger.info(f"Applying blink animation to {video_path}")
+
+        # Run CPU-bound operations in thread pool
+        loop = asyncio.get_running_loop()
+
+        # Read frames
+        frames, fps = await loop.run_in_executor(
+            None, read_video_frames, str(video_path)
+        )
+
+        # Apply blink animation
+        blink_processor = get_blink_processor()
+        processed_frames = await loop.run_in_executor(
+            None,
+            blink_processor.add_blinks_to_frames,
+            frames,
+            fps,
+            settings.get_blink_interval_range,
+            settings.get_blink_duration_range
+        )
+
+        # Write frames back with original audio
+        await loop.run_in_executor(
+            None,
+            write_video_frames,
+            processed_frames,
+            str(video_path),
+            fps,
+            str(audio_path)
+        )
+
+        logger.info(f"Blink animation applied successfully to {video_path}")
+        return result
+
+    except Exception as e:
+        logger.warning(f"Blink post-processing failed, returning original video: {e}")
+        return result
+
+
 async def _save_to_storage(data: bytes, filename: str, subdir: str = "uploads") -> str:
     """Save file directly to shared storage volume and return storage URL."""
     ext = Path(filename).suffix.lower() or '.bin'
@@ -185,6 +249,7 @@ class VideoGenerationRequest(BaseModel):
     """リップシンク動画生成リクエスト（MuseTalk）"""
     audio_url: str
     source_url: str  # リップシンクには必須
+    enable_blink: Optional[bool] = None  # None = use config default
 
 class VideoGenerationResponse(BaseModel):
     """動画生成レスポンス"""
@@ -257,6 +322,14 @@ async def generate_video(request: VideoGenerationRequest):
             )
         else:
             raise HTTPException(status_code=501, detail=f"Engine {engine_name} not implemented")
+
+        # Apply blink animation post-processing if enabled
+        blink_enabled = request.enable_blink
+        if blink_enabled is None:
+            blink_enabled = settings.is_blink_enabled
+
+        if blink_enabled and result.get("result_url"):
+            result = await _apply_blink_postprocessing(result, audio_path)
 
         # Transform result_url to backend-served path
         result_url = None
