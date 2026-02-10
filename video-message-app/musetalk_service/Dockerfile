@@ -50,8 +50,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
     && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
 
-# Upgrade pip
-RUN python -m pip install --upgrade pip setuptools wheel
+# Upgrade pip and ensure setuptools has pkg_resources
+RUN python -m pip install --upgrade pip wheel && \
+    python -m pip install --upgrade "setuptools>=70.0.0"
 
 # Create working directory
 WORKDIR /app
