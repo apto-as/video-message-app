@@ -50,8 +50,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
     && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
 
-# Upgrade pip and ensure setuptools has pkg_resources
-RUN python -m pip install --upgrade pip wheel && \
+# Upgrade pip (but not to latest - pip 26.x has issues with pkg_resources in subprocesses)
+# Pin to pip 23.3.x which handles pyproject.toml builds correctly
+RUN python -m pip install --upgrade "pip>=23.0,<24.0" wheel && \
     python -m pip install --upgrade "setuptools>=70.0.0"
 
 # Create working directory
