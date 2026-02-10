@@ -50,10 +50,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
     && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
 
-# Upgrade pip (but not to latest - pip 26.x has issues with pkg_resources in subprocesses)
-# Pin to pip 23.3.x which handles pyproject.toml builds correctly
+# Upgrade pip and setuptools
+# Use setuptools 69.x which includes pkg_resources (needed by openai-whisper's setup.py)
+# Note: setuptools >=70 changed how pkg_resources works, causing compatibility issues
 RUN python -m pip install --upgrade "pip>=23.0,<24.0" wheel && \
-    python -m pip install --upgrade "setuptools>=70.0.0"
+    python -m pip install "setuptools>=69.0.0,<70.0.0"
 
 # Create working directory
 WORKDIR /app
@@ -76,10 +77,9 @@ RUN python -m pip install cmake && \
     rm -rf /tmp/dlib
 
 # Copy requirements and install Python dependencies
-# Note: openai-whisper requires --no-build-isolation because its setup.py
-# uses pkg_resources which isn't available in pip's isolated build environment
+# Note: openai-whisper setup.py uses pkg_resources which is available in setuptools <70
 COPY requirements.txt /app/requirements.txt
-RUN python -m pip install --no-cache-dir openai-whisper==20231117 --no-build-isolation && \
+RUN python -m pip install --no-cache-dir openai-whisper==20231117 && \
     python -m pip install --no-cache-dir -r requirements.txt
 
 # Verify PyTorch is available before MMLab installation
