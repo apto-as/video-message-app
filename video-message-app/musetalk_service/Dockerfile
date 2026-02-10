@@ -77,9 +77,11 @@ RUN python -m pip install cmake && \
     rm -rf /tmp/dlib
 
 # Copy requirements and install Python dependencies
-# Note: openai-whisper setup.py uses pkg_resources which is available in setuptools <70
+# Note: openai-whisper's setup.py uses pkg_resources from setuptools
+# --no-build-isolation forces pip to use the current env's setuptools (69.x with pkg_resources)
+# instead of creating an isolated build env which lacks pkg_resources
 COPY requirements.txt /app/requirements.txt
-RUN python -m pip install --no-cache-dir openai-whisper==20231117 && \
+RUN python -m pip install --no-cache-dir --no-build-isolation openai-whisper==20231117 && \
     python -m pip install --no-cache-dir -r requirements.txt
 
 # Verify PyTorch is available before MMLab installation
