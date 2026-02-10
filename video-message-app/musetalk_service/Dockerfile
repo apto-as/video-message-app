@@ -88,11 +88,11 @@ RUN python -m pip install --no-cache-dir --no-build-isolation openai-whisper==20
 RUN python -c "import torch; print(f'PyTorch {torch.__version__} installed, CUDA: {torch.cuda.is_available()}')"
 
 # Install MMLab packages required by MuseTalk (mmpose, mmcv, mmdet)
-# Note: mim requires torch to detect CUDA version for correct wheel selection
-# Note: chumpy is skipped as it has broken build and MuseTalk doesn't need SMPL body model
+# Use pre-built wheels from OpenMMLab's index to avoid C++17 compilation issues
+# torch 2.1.x + cu118 requires mmcv-lite or specific pre-built wheel
 RUN python -m pip install --no-cache-dir -U openmim && \
     python -m mim install mmengine && \
-    python -m mim install "mmcv==2.0.1" && \
+    python -m pip install --no-cache-dir mmcv==2.0.1 -f https://download.openmmlab.com/mmcv/dist/cu118/torch2.1/index.html && \
     python -m mim install "mmdet==3.1.0" && \
     python -m pip install --no-cache-dir "mmpose==1.1.0" --no-deps && \
     python -m pip install --no-cache-dir xtcocotools json_tricks munkres
