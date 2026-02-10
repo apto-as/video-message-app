@@ -75,8 +75,11 @@ RUN python -m pip install cmake && \
     rm -rf /tmp/dlib
 
 # Copy requirements and install Python dependencies
+# Note: openai-whisper requires --no-build-isolation because its setup.py
+# uses pkg_resources which isn't available in pip's isolated build environment
 COPY requirements.txt /app/requirements.txt
-RUN python -m pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir openai-whisper==20231117 --no-build-isolation && \
+    python -m pip install --no-cache-dir -r requirements.txt
 
 # Verify PyTorch is available before MMLab installation
 RUN python -c "import torch; print(f'PyTorch {torch.__version__} installed, CUDA: {torch.cuda.is_available()}')"

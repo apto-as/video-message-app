@@ -43,7 +43,8 @@ face-alignment==1.4.1
 mediapipe==0.10.9
 
 # Whisper for audio feature extraction
-openai-whisper==20231117
+# Note: openai-whisper is installed in Dockerfile with --no-build-isolation
+# (its setup.py uses pkg_resources which isn't available in pip's isolated build env)
 
 # Video processing
 imageio==2.34.0
