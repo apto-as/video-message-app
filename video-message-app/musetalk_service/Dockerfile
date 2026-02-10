@@ -94,8 +94,9 @@ RUN python -m pip install --no-cache-dir -U openmim && \
     python -m mim install mmengine && \
     python -m pip install --no-cache-dir --no-build-isolation https://download.openmmlab.com/mmcv/dist/cu118/torch2.1.0/mmcv-2.1.0-cp311-cp311-manylinux1_x86_64.whl
 
-# Install mmdet after mmcv (separate layer to avoid mmcv reinstall)
-RUN python -m mim install "mmdet==3.1.0" && \
+# Install mmdet with --no-deps to prevent mmcv reinstall, then install other deps manually
+RUN python -m pip install --no-cache-dir mmdet==3.1.0 --no-deps && \
+    python -m pip install --no-cache-dir matplotlib pycocotools scipy shapely six terminaltables && \
     python -m pip install --no-cache-dir "mmpose==1.1.0" --no-deps && \
     python -m pip install --no-cache-dir xtcocotools json_tricks munkres
 
