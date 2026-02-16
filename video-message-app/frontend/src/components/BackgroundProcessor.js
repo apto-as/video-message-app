@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { getApiEndpoint, API_CONFIG } from '../config/api.config.js';
+import BackgroundPresetSelector from './BackgroundPresetSelector';
 
-const BackgroundProcessor = ({ 
-    onImageProcessed, 
+const BackgroundProcessor = ({
+    onImageProcessed,
     disabled = false,
-    image = null 
+    image = null
 }) => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [backgroundImage, setBackgroundImage] = useState(null);
+    const [selectedPreset, setSelectedPreset] = useState(null);
+    const [bgMode, setBgMode] = useState('preset'); // 'preset' or 'upload'
     const [removeBackground, setRemoveBackground] = useState(true);
     const [enhanceQuality, setEnhanceQuality] = useState(true);
     const [processedImageUrl, setProcessedImageUrl] = useState(null);
@@ -27,14 +30,23 @@ const BackgroundProcessor = ({
         }
     };
 
+    const handlePresetSelect = (bg) => {
+        setSelectedPreset(bg);
+        // Clear uploaded background when selecting preset
+        if (bg) setBackgroundImage(null);
+    };
+
     const processImage = async () => {
         if (!image) {
             alert('まず、メイン画像をアップロードしてください');
             return;
         }
 
+        const usePresetBg = bgMode === 'preset' && selectedPreset;
+        const useUploadBg = bgMode === 'upload' && backgroundImage;
+
         // 背景削除も背景画像もない場合は処理をスキップ
-        if (!removeBackground && !backgroundImage) {
+        if (!removeBackground && !usePresetBg && !useUploadBg) {
             alert('背景削除または背景画像を選択してください');
             return;
         }
@@ -43,13 +55,23 @@ const BackgroundProcessor = ({
         setProcessedImageUrl(null);
 
         try {
+            // If using preset background, fetch it first
+            let bgFile = backgroundImage;
+            if (usePresetBg) {
+                const bgUrl = getApiEndpoint(selectedPreset.image_url);
+                const bgResponse = await fetch(bgUrl);
+                if (!bgResponse.ok) throw new Error('プリセット背景の取得に失敗しました');
+                const bgBlob = await bgResponse.blob();
+                bgFile = new File([bgBlob], `${selectedPreset.id}.jpg`, { type: bgBlob.type || 'image/jpeg' });
+            }
+
             const formData = new FormData();
             formData.append('image', image);
             formData.append('remove_background', removeBackground);
             formData.append('enhance_quality', enhanceQuality);
-            
-            if (backgroundImage) {
-                formData.append('background', backgroundImage);
+
+            if (bgFile) {
+                formData.append('background', bgFile);
             }
 
             const apiUrl = getApiEndpoint(API_CONFIG.ENDPOINTS.PROCESS_IMAGE);
@@ -106,6 +128,7 @@ const BackgroundProcessor = ({
     const clearProcessing = () => {
         setProcessedImageUrl(null);
         setBackgroundImage(null);
+        setSelectedPreset(null);
         if (onImageProcessed) {
             onImageProcessed(null, null);
         }
@@ -138,21 +161,50 @@ const BackgroundProcessor = ({
             </div>
 
             {removeBackground && (
-                <div className="background-upload">
-                    <label className="file-label">
-                        <span>🖼️ 背景画像を選択（オプション）:</span>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleBackgroundImageChange}
+                <div className="background-source">
+                    <div className="bg-mode-toggle">
+                        <button
+                            className={`bg-mode-btn ${bgMode === 'preset' ? 'active' : ''}`}
+                            onClick={() => setBgMode('preset')}
                             disabled={disabled || isProcessing}
-                            className="file-input"
+                        >
+                            プリセットから選択
+                        </button>
+                        <button
+                            className={`bg-mode-btn ${bgMode === 'upload' ? 'active' : ''}`}
+                            onClick={() => setBgMode('upload')}
+                            disabled={disabled || isProcessing}
+                        >
+                            画像をアップロード
+                        </button>
+                    </div>
+
+                    {bgMode === 'preset' && (
+                        <BackgroundPresetSelector
+                            onSelect={handlePresetSelect}
+                            selectedId={selectedPreset?.id}
+                            disabled={disabled || isProcessing}
                         />
-                    </label>
-                    {backgroundImage && (
-                        <p className="file-info">
-                            選択された背景: {backgroundImage.name}
-                        </p>
+                    )}
+
+                    {bgMode === 'upload' && (
+                        <div className="background-upload">
+                            <label className="file-label">
+                                <span>背景画像を選択:</span>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleBackgroundImageChange}
+                                    disabled={disabled || isProcessing}
+                                    className="file-input"
+                                />
+                            </label>
+                            {backgroundImage && (
+                                <p className="file-info">
+                                    選択された背景: {backgroundImage.name}
+                                </p>
+                            )}
+                        </div>
                     )}
                 </div>
             )}
@@ -160,13 +212,14 @@ const BackgroundProcessor = ({
             <div className="process-controls">
                 <button
                     onClick={processImage}
-                    disabled={disabled || isProcessing || !image || (!removeBackground && !backgroundImage)}
+                    disabled={disabled || isProcessing || !image || (!removeBackground && !selectedPreset && !backgroundImage)}
                     className="process-button"
                 >
-                    {isProcessing ? '🔄 処理中...' : 
-                     backgroundImage ? '🎨 背景合成して処理' :
-                     removeBackground ? '✂️ 背景削除して処理' : 
-                     '✨ 画像を処理'}
+                    {isProcessing ? '処理中...' :
+                     selectedPreset ? '背景合成して処理' :
+                     backgroundImage ? '背景合成して処理' :
+                     removeBackground ? '背景削除して処理' :
+                     '画像を処理'}
                 </button>
 
                 {processedImageUrl && (
@@ -180,9 +233,9 @@ const BackgroundProcessor = ({
                 )}
             </div>
 
-            {!removeBackground && !backgroundImage && (
+            {!removeBackground && !backgroundImage && !selectedPreset && (
                 <div className="info-message">
-                    💡 背景削除または背景画像を選択すると処理が実行されます
+                    背景削除または背景画像を選択すると処理が実行されます
                 </div>
             )}
 
@@ -219,6 +272,49 @@ const BackgroundProcessor = ({
 
                 .checkbox-label input {
                     margin-right: 8px;
+                }
+
+                .background-source {
+                    margin: 15px 0;
+                }
+
+                .bg-mode-toggle {
+                    display: flex;
+                    gap: 0;
+                    margin-bottom: 12px;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    overflow: hidden;
+                }
+
+                .bg-mode-btn {
+                    flex: 1;
+                    padding: 10px 16px;
+                    border: none;
+                    background: #f5f5f5;
+                    cursor: pointer;
+                    font-size: 14px;
+                    color: #666;
+                    transition: all 0.2s;
+                }
+
+                .bg-mode-btn:first-child {
+                    border-right: 1px solid #ddd;
+                }
+
+                .bg-mode-btn.active {
+                    background: #007bff;
+                    color: white;
+                    font-weight: 500;
+                }
+
+                .bg-mode-btn:hover:not(.active):not(:disabled) {
+                    background: #e9ecef;
+                }
+
+                .bg-mode-btn:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
                 }
 
                 .background-upload {

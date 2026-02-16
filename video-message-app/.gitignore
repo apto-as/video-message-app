@@ -58,6 +58,9 @@ docker-compose.override.yml  # Mac-specific, auto-generated
 
 # Docker volumes and data
 data/
+!backend/data/
+backend/data/*
+!backend/data/presets/
 storage/
 volumes/
 

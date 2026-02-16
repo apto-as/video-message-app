@@ -7,6 +7,7 @@ import LoadingSpinner from './LoadingSpinner';
 import BackgroundProcessor from './BackgroundProcessor';
 import PersonDetector from './PersonDetector';
 import VoiceVoxSelector from './VoiceVoxSelector';
+import BGMSelector from './BGMSelector';
 import { generateVideoWithVoicevox, generateVideoWithClonedVoice } from '../services/api';
 import './VideoGenerator.css';
 
@@ -20,6 +21,7 @@ const VideoGenerator = () => {
   const [processedImageData, setProcessedImageData] = useState(null);
   const [processingInfo, setProcessingInfo] = useState(null);
   const [selectedVoice, setSelectedVoice] = useState(null);
+  const [selectedBGM, setSelectedBGM] = useState(null);
   const [audioParams, setAudioParams] = useState({
     speed_scale: 1.0,
     pitch_scale: 0.0,
@@ -55,11 +57,13 @@ const VideoGenerator = () => {
         dataURLToFile(processedImageData, 'processed-image.jpg') :
         image;
 
+      const bgmId = selectedBGM ? selectedBGM.id : null;
+
       // 音声合成と動画生成を統合して実行
       if (selectedVoice && selectedVoice.provider === 'voicevox') {
-        result = await generateVideoWithVoicevox(imageToUse, text, selectedVoice, audioParams);
+        result = await generateVideoWithVoicevox(imageToUse, text, selectedVoice, audioParams, bgmId);
       } else if (selectedVoice && selectedVoice.provider === 'voice-clone') {
-        result = await generateVideoWithClonedVoice(imageToUse, text, selectedVoice, audioParams);
+        result = await generateVideoWithClonedVoice(imageToUse, text, selectedVoice, audioParams, bgmId);
       } else {
         throw new Error('音声を選択してください');
       }
@@ -98,6 +102,7 @@ const VideoGenerator = () => {
     setProcessedImageData(null);
     setProcessingInfo(null);
     setSelectedVoice(null);
+    setSelectedBGM(null);
     setAudioParams({
       speed_scale: 1.0,
       pitch_scale: 0.0,
@@ -321,6 +326,12 @@ const VideoGenerator = () => {
               </div>
             </div>
           )}
+
+          <BGMSelector
+            onSelect={setSelectedBGM}
+            selectedId={selectedBGM?.id}
+            disabled={loading}
+          />
 
           <button
             onClick={handleGenerate}

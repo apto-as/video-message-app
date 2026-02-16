@@ -5,7 +5,7 @@ import { API_CONFIG, getApiEndpoint } from '../config/api.config';
 const API_BASE_URL = API_CONFIG.API_URL;
 
 // VOICEVOX音声合成（2段階処理：音声生成→リップシンク動画生成）
-export const generateVideoWithVoicevox = async (imageFile, text, voiceData = null, audioParams = {}) => {
+export const generateVideoWithVoicevox = async (imageFile, text, voiceData = null, audioParams = {}, bgmId = null) => {
   try {
     // Step 1: VOICEVOX音声合成
     const voiceRequest = {
@@ -31,7 +31,7 @@ export const generateVideoWithVoicevox = async (imageFile, text, voiceData = nul
     const audioUrl = URL.createObjectURL(audioBlob);
 
     // Step 2: リップシンク動画生成（MuseTalk経由）
-    const videoResult = await generateVideoWithLipsync(audioUrl, imageFile, {});
+    const videoResult = await generateVideoWithLipsync(audioUrl, imageFile, {}, bgmId);
 
     return {
       success: true,
@@ -51,7 +51,7 @@ export const generateVideoWithVoicevox = async (imageFile, text, voiceData = nul
 };
 
 // Voice Clone音声合成（2段階処理：音声生成→リップシンク動画生成）
-export const generateVideoWithClonedVoice = async (imageFile, text, voiceData = null, audioParams = {}) => {
+export const generateVideoWithClonedVoice = async (imageFile, text, voiceData = null, audioParams = {}, bgmId = null) => {
   try {
     // 【緊急修正】voice_profileオブジェクトとして送信
     const voiceRequest = {
@@ -85,7 +85,7 @@ export const generateVideoWithClonedVoice = async (imageFile, text, voiceData = 
     // Audio synthesis successful
 
     // Step 2: リップシンク動画生成（MuseTalk経由）
-    const videoResult = await generateVideoWithLipsync(audioUrl, imageFile, {});
+    const videoResult = await generateVideoWithLipsync(audioUrl, imageFile, {}, bgmId);
 
     return {
       success: true,
@@ -251,7 +251,7 @@ export const testVoiceProfile = async (profileId, text = "こんにちは、音�
 };
 
 // リップシンク動画生成（MuseTalk経由）
-export const generateVideoWithLipsync = async (audioUrl, imageFile = null, options = {}) => {
+export const generateVideoWithLipsync = async (audioUrl, imageFile = null, options = {}, bgmId = null) => {
   try {
     // 画像ファイルが必須であることを確認
     if (!imageFile) {
@@ -298,7 +298,8 @@ export const generateVideoWithLipsync = async (audioUrl, imageFile = null, optio
     // リップシンク動画生成リクエスト（MuseTalk経由）
     const requestData = {
       audio_url: uploadedAudioUrl,
-      source_url: sourceUrl
+      source_url: sourceUrl,
+      ...(bgmId && { bgm_id: bgmId })
     };
 
     const response = await axios.post(`${API_BASE_URL}/lipsync/generate-video`, requestData, {
