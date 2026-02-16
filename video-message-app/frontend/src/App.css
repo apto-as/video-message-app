@@ -13,10 +13,22 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: #f5f5f5;
   color: #333;
+  /* Safe area for notch / Dynamic Island */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 .App {
   min-height: 100vh;
+  /* Standalone PWA: prevent rubber-band overscroll */
+  overscroll-behavior-y: contain;
+}
+
+/* iOS tap highlight removal */
+button, a, input, textarea, select {
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Video Generator */
@@ -292,16 +304,40 @@ body {
     padding: 20px;
     margin: 10px;
   }
-  
+
   .app-header h1 {
     font-size: 24px;
   }
-  
+
   .video-actions {
     flex-direction: column;
   }
-  
+
   .download-button, .reset-button {
     width: 100%;
+    min-height: 44px; /* iOS touch target */
+  }
+
+  .generate-button {
+    min-height: 48px; /* Primary action touch target */
+  }
+
+  .image-upload {
+    padding: 30px 16px;
+  }
+}
+
+/* PWA standalone mode adjustments */
+@media (display-mode: standalone) {
+  .App {
+    /* Prevent text selection on UI elements in standalone */
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Allow text selection in input areas */
+  .text-input, input[type="text"], textarea {
+    -webkit-user-select: text;
+    user-select: text;
   }
 }

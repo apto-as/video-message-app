@@ -53,6 +53,7 @@ function App() {
           background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
           color: white;
           padding: 0;
+          padding-top: env(safe-area-inset-top);
           box-shadow: 0 4px 12px rgba(0,0,0,0.15);
           position: sticky;
           top: 0;
