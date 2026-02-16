@@ -55,4 +55,4 @@ simple-lama-inpainting>=0.1.0
 
 # MediaPipe for blink animation post-processing
 # Used for eye region detection in BlinkProcessor
-mediapipe>=0.10.0
+mediapipe>=0.10.0,<=0.10.18
