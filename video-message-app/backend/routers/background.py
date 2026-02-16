@@ -88,16 +88,8 @@ async def process_image(
                 status_code=400,
                 detail=f"セキュリティ検証エラー: {error_msg}"
             )
-        
-        # ImageProcessorを使用した統一的な画像検証
+
         processor = ImageProcessor()
-        is_valid, error_msg = processor.validate_image(image_content)
-        if not is_valid:
-            raise HTTPException(
-                status_code=400,
-                detail=f"画像検証エラー: {error_msg}"
-            )
-        
         logger.info(f"画像処理開始: remove_background={remove_background}, enhance_quality={enhance_quality}")
         
         # 処理が不要な場合
@@ -126,14 +118,6 @@ async def process_image(
                 raise HTTPException(
                     status_code=400,
                     detail=f"背景画像セキュリティエラー: {bg_error}"
-                )
-
-            # 背景画像の検証も統一的に実行
-            bg_valid, bg_error = processor.validate_image(background_content)
-            if not bg_valid:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"背景画像検証エラー: {bg_error}"
                 )
 
         # 実際の画像処理を実行（タイムアウト付き）
@@ -236,14 +220,7 @@ async def remove_background_only(
                 detail=f"セキュリティ検証エラー: {error_msg}"
             )
 
-        # ImageProcessorを使用した統一的な画像検証
         processor = ImageProcessor()
-        is_valid, error_msg = processor.validate_image(image_content)
-        if not is_valid:
-            raise HTTPException(
-                status_code=400,
-                detail=f"画像検証エラー: {error_msg}"
-            )
 
         # SECURITY: Timeout enforcement
         with ProcessingTimeoutManager(timeout_seconds=30) as timeout:

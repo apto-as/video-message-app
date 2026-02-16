@@ -14,6 +14,8 @@ from typing import Optional, Tuple
 import logging
 
 from core.config import settings
+from security.image_validator import ImageSecurityValidator
+from security.audio_validator import AudioValidator
 
 STORAGE_DIR = Path(os.environ.get("STORAGE_PATH", "/app/storage"))
 
@@ -406,6 +408,11 @@ async def upload_source_image(file: UploadFile = File(...)):
         if len(image_data) > MAX_IMAGE_SIZE_BYTES:
             raise HTTPException(status_code=400, detail=f"画像ファイルが大きすぎます（最大{MAX_IMAGE_SIZE_BYTES // (1024*1024)}MB）")
 
+        # Security: Image bomb detection & metadata validation
+        is_safe, error_msg = ImageSecurityValidator.comprehensive_validation(image_data)
+        if not is_safe:
+            raise HTTPException(status_code=400, detail=f"セキュリティ検証エラー: {error_msg}")
+
         image_url = await _save_to_storage(image_data, file.filename or "image.png", subdir="uploads")
         logger.info(f"画像保存完了: {image_url}")
         return {"url": image_url}
@@ -428,14 +435,17 @@ async def upload_audio(file: UploadFile = File(...)):
         保存された音声のストレージURL
     """
     try:
-        allowed_types = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/mp4', 'audio/flac', 'audio/m4a']
-        if not file.content_type or file.content_type not in allowed_types:
-            raise HTTPException(status_code=400, detail="音声ファイル（WAV, MP3, MP4, FLAC, M4A）をアップロードしてください")
+        # Security: Format validation via AudioValidator
+        is_valid, error_msg = AudioValidator.validate_format(file.content_type, file.filename)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
 
         audio_data = await file.read()
 
-        if len(audio_data) > MAX_AUDIO_SIZE_BYTES:
-            raise HTTPException(status_code=400, detail=f"音声ファイルが大きすぎます（最大{MAX_AUDIO_SIZE_BYTES // (1024*1024)}MB）")
+        # Security: File size validation via AudioValidator
+        is_valid, error_msg = AudioValidator.validate_file_size(len(audio_data))
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
 
         audio_url = await _save_to_storage(audio_data, file.filename or "audio.wav", subdir="uploads")
         logger.info(f"音声保存完了: {audio_url}")
