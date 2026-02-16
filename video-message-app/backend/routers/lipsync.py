@@ -212,6 +212,12 @@ async def _apply_blink_postprocessing(result: dict, audio_path: Path) -> dict:
             settings.get_blink_duration_range
         )
 
+        # Skip re-encoding if blinks were not actually applied
+        # (add_blinks_to_frames returns the same list reference when skipped)
+        if processed_frames is frames:
+            logger.info(f"Blink animation skipped for {video_path}")
+            return result
+
         # Write frames back with original audio
         await loop.run_in_executor(
             None,
@@ -222,7 +228,7 @@ async def _apply_blink_postprocessing(result: dict, audio_path: Path) -> dict:
             str(audio_path)
         )
 
-        logger.info(f"Blink animation applied successfully to {video_path}")
+        logger.info(f"Blink animation applied successfully ({len(frames)} frames) to {video_path}")
         return result
 
     except Exception as e:
