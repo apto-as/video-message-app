@@ -11,6 +11,7 @@ import numpy as np
 import cv2
 
 from services.person_detector import PersonDetector
+from services.image_processor import ImageProcessor
 from core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,16 @@ router = APIRouter(prefix="/api/person-detection", tags=["person-detection"])
 
 # Initialize detector (lazy loading on first request)
 _detector: Optional[PersonDetector] = None
+_image_processor: Optional[ImageProcessor] = None
+
+
+def get_image_processor() -> ImageProcessor:
+    """Get or initialize image processor singleton for background removal"""
+    global _image_processor
+    if _image_processor is None:
+        _image_processor = ImageProcessor()
+        logger.info("ImageProcessor initialized for person extraction")
+    return _image_processor
 
 
 def get_detector() -> PersonDetector:
@@ -271,9 +282,9 @@ async def extract_selected_person(
 
         h, w = img.shape[:2]
 
-        # Create mask for selected persons using rembg for each person region
+        # Create mask for selected persons using ImageProcessor service
         try:
-            from rembg import remove
+            processor = get_image_processor()
 
             # Create combined mask
             combined_mask = np.zeros((h, w), dtype=np.uint8)
@@ -289,19 +300,13 @@ async def extract_selected_person(
                 # Extract person region
                 person_region = img[y1:y2, x1:x2]
 
-                # Remove background from this region using rembg
+                # Remove background via ImageProcessor service layer
                 # Alpha matting有効化: 白い服が透過する問題を軽減
-                # - alpha_matting=True: エッジ処理を滑らかに
-                # - alpha_matting_foreground_threshold=270: 前景検出感度を上げる（白も前景として認識）
-                # - alpha_matting_background_threshold=10: 背景検出感度を下げる
-                # - post_process_mask=True: ノイズ除去
-                person_rgba = remove(
+                person_rgba = processor.remove_background_region(
                     person_region,
-                    alpha_matting=True,
                     alpha_matting_foreground_threshold=270,
                     alpha_matting_background_threshold=10,
                     alpha_matting_erode_size=10,
-                    post_process_mask=True
                 )
 
                 # --- LaMa Inpainting Integration ---
@@ -460,7 +465,7 @@ async def extract_selected_person(
             }
 
         except ImportError:
-            logger.error("rembg not installed, falling back to bbox-only extraction")
+            logger.error("rembg/ImageProcessor not available, falling back to bbox-only extraction")
             # Fallback: simple bbox extraction without background removal
             combined_mask = np.zeros((h, w), dtype=np.uint8)
 

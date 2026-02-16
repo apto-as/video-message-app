@@ -6,6 +6,7 @@ import asyncio
 import io
 from typing import Optional, Tuple
 from PIL import Image, ImageEnhance, ImageFilter
+import numpy as np
 import rembg
 
 
@@ -113,6 +114,39 @@ class ImageProcessor:
         # rembgで背景削除
         output = rembg.remove(image_bytes, session=self.session)
         return output
+
+    def remove_background_region(
+        self,
+        image_array: np.ndarray,
+        alpha_matting: bool = True,
+        alpha_matting_foreground_threshold: int = 270,
+        alpha_matting_background_threshold: int = 10,
+        alpha_matting_erode_size: int = 10,
+        post_process_mask: bool = True,
+    ) -> np.ndarray:
+        """
+        人物領域の背景削除（alpha matting対応、numpy配列入出力）
+
+        Args:
+            image_array: 入力画像のnumpy配列 (BGR)
+            alpha_matting: alpha mattingを有効化
+            alpha_matting_foreground_threshold: 前景検出感度
+            alpha_matting_background_threshold: 背景検出感度
+            alpha_matting_erode_size: エッジ浸食サイズ
+            post_process_mask: マスクのノイズ除去
+
+        Returns:
+            背景削除後のnumpy配列 (BGRA)
+        """
+        return rembg.remove(
+            image_array,
+            session=self.session,
+            alpha_matting=alpha_matting,
+            alpha_matting_foreground_threshold=alpha_matting_foreground_threshold,
+            alpha_matting_background_threshold=alpha_matting_background_threshold,
+            alpha_matting_erode_size=alpha_matting_erode_size,
+            post_process_mask=post_process_mask,
+        )
     
     async def composite_background(self, subject_bytes: bytes, background_bytes: bytes) -> bytes:
         """

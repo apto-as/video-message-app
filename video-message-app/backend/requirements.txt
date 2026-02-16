@@ -10,7 +10,6 @@ pydantic-settings==2.1.0
 slowapi==0.1.9  # FastAPI rate limiting middleware
 redis==5.0.1
 aiohttp==3.9.1
-tenacity==8.2.3
 psutil==5.9.8  # システムリソース監視用
 
 # Testing

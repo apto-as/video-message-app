@@ -19,6 +19,7 @@ import os
 import logging
 
 from core.config import settings
+from security.audio_validator import AudioValidator
 
 router = APIRouter(prefix="/voice-clone", tags=["Voice Clone"])
 logger = logging.getLogger(__name__)
@@ -110,12 +111,20 @@ async def register_voice_clone(
         # 音声サンプルの検証
         logger.info(f"音声サンプル数: {len(audio_samples)}")
         logger.info(f"音声サンプル詳細: {[f'{f.filename} ({f.size} bytes)' for f in audio_samples]}")
-        
+
         if len(audio_samples) < 3:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail="最低3つの音声サンプルが必要です"
             )
+
+        # Security: 各音声ファイルのフォーマット検証
+        for audio_file in audio_samples:
+            is_valid, error_msg = AudioValidator.validate_format(
+                audio_file.content_type, audio_file.filename
+            )
+            if not is_valid:
+                raise HTTPException(status_code=400, detail=f"{audio_file.filename}: {error_msg}")
         
         # プロファイルID生成
         profile_id = f"clone_{uuid.uuid4().hex[:8]}"
@@ -205,7 +214,22 @@ async def register_voice_clone(
                 else:
                     logger.error(f"変換後ファイル検証失敗: {verify_result.stderr}")
                     raise Exception(f"変換後ファイルの検証に失敗しました: {verify_result.stderr}")
-                
+
+                # Security: AudioValidator でオーディオボム検出
+                is_valid, error_msg, audio_info = AudioValidator.validate_audio_file_comprehensive(
+                    file_path=Path(wav_file.name),
+                    file_size=os.path.getsize(wav_file.name),
+                    content_type="audio/wav",
+                    filename=audio_file.filename,
+                    use_case="voice_clone",
+                    strict=True
+                )
+                if not is_valid:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"音声ファイル {audio_file.filename}: {error_msg}"
+                    )
+
                 sample_paths.append(wav_file.name)
                 
             except subprocess.CalledProcessError as e:
