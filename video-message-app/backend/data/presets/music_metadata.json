@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "category": "birthday",
+  "items": [
+    {
+      "id": "bgm-sunny",
+      "name": "Sunny",
+      "artist": "Bensound",
+      "description": "明るく楽しいアコースティックメロディー",
+      "mood": "cheerful",
+      "duration_seconds": 150,
+      "license": "CC-BY 3.0",
+      "attribution": "Music: Bensound.com (CC BY 3.0)"
+    },
+    {
+      "id": "bgm-jazz-piano",
+      "name": "Jazz Piano",
+      "artist": "Pixabay Artist",
+      "description": "落ち着いたジャズピアノ",
+      "mood": "relaxed",
+      "duration_seconds": 120,
+      "license": "Pixabay License",
+      "attribution": ""
+    },
+    {
+      "id": "bgm-happy-boy",
+      "name": "Happy Boy End Theme",
+      "artist": "Kevin MacLeod",
+      "description": "陽気で楽しいエンディングテーマ",
+      "mood": "playful",
+      "duration_seconds": 90,
+      "license": "CC-BY 3.0",
+      "attribution": "Music: Kevin MacLeod (incompetech.com) Licensed under CC BY 3.0"
+    },
+    {
+      "id": "bgm-birthday-piano",
+      "name": "Birthday Piano",
+      "artist": "Pixabay Artist",
+      "description": "優しいピアノのバースデーBGM",
+      "mood": "gentle",
+      "duration_seconds": 100,
+      "license": "Pixabay License",
+      "attribution": ""
+    },
+    {
+      "id": "bgm-carefree",
+      "name": "Carefree",
+      "artist": "Kevin MacLeod",
+      "description": "のんびりと心地よいメロディー",
+      "mood": "cheerful",
+      "duration_seconds": 160,
+      "license": "CC-BY 3.0",
+      "attribution": "Music: Kevin MacLeod (incompetech.com) Licensed under CC BY 3.0"
+    }
+  ]
+}

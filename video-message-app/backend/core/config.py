@@ -139,6 +139,20 @@ class Settings(BaseSettings):
         description="Maximum blink duration in seconds"
     )
 
+    # BGM mixing settings
+    bgm_volume_db: float = Field(
+        default=-18.0,
+        ge=-30.0,
+        le=0.0,
+        description="BGM volume in dB relative to speech audio"
+    )
+    bgm_fade_out_seconds: float = Field(
+        default=2.0,
+        ge=0.0,
+        le=10.0,
+        description="BGM fade-out duration in seconds at end of video"
+    )
+
     class Config:
         env_file = ".env"
         extra = "ignore"  # 追加の環境変数を許可

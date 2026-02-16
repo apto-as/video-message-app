@@ -258,6 +258,7 @@ class VideoGenerationRequest(BaseModel):
     audio_url: str
     source_url: str  # リップシンクには必須
     enable_blink: Optional[bool] = None  # None = use config default
+    bgm_id: Optional[str] = None  # Preset BGM track ID to mix into video
 
 class VideoGenerationResponse(BaseModel):
     """動画生成レスポンス"""
@@ -338,6 +339,23 @@ async def generate_video(request: VideoGenerationRequest):
 
         if blink_enabled and result.get("result_url"):
             result = await _apply_blink_postprocessing(result, audio_path)
+
+        # Mix BGM into video if requested
+        if request.bgm_id and result.get("result_url"):
+            try:
+                from services.audio_mixer import mix_bgm_into_video
+                video_path = _resolve_storage_path(result["result_url"])
+                await mix_bgm_into_video(
+                    video_path=video_path,
+                    track_id=request.bgm_id,
+                    bgm_volume_db=settings.bgm_volume_db,
+                    fade_out_seconds=settings.bgm_fade_out_seconds,
+                )
+                logger.info(f"BGM '{request.bgm_id}' mixed into video")
+            except FileNotFoundError:
+                logger.warning(f"BGM track not found: {request.bgm_id}, skipping")
+            except Exception as e:
+                logger.warning(f"BGM mixing failed, returning video without BGM: {e}")
 
         # Transform result_url to backend-served path
         result_url = None

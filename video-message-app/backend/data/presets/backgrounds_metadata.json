@@ -1,0 +1,96 @@
+{
+  "version": "1.0",
+  "category": "birthday",
+  "items": [
+    {
+      "id": "bg-pastel-confetti",
+      "name": "パステルコンフェッティ",
+      "description": "柔らかなパステルカラーの紙吹雪",
+      "category": "festive",
+      "tags": ["confetti", "pastel", "celebration"],
+      "source": "unsplash",
+      "license": "Unsplash License"
+    },
+    {
+      "id": "bg-pink-balloons",
+      "name": "ピンクバルーン",
+      "description": "ピンクの風船が浮かぶお祝いの空間",
+      "category": "balloons",
+      "tags": ["balloons", "pink", "party"],
+      "source": "pexels",
+      "license": "Pexels License"
+    },
+    {
+      "id": "bg-gold-bokeh",
+      "name": "ゴールドボケ",
+      "description": "金色に輝くボケライト",
+      "category": "elegant",
+      "tags": ["gold", "bokeh", "lights", "elegant"],
+      "source": "unsplash",
+      "license": "Unsplash License"
+    },
+    {
+      "id": "bg-birthday-cake",
+      "name": "バースデーケーキ",
+      "description": "カラフルなバースデーケーキ",
+      "category": "cake",
+      "tags": ["cake", "birthday", "candles"],
+      "source": "pexels",
+      "license": "Pexels License"
+    },
+    {
+      "id": "bg-paper-flowers",
+      "name": "ペーパーフラワー",
+      "description": "色とりどりの紙製フラワー装飾",
+      "category": "floral",
+      "tags": ["flowers", "paper", "colorful", "decoration"],
+      "source": "unsplash",
+      "license": "Unsplash License"
+    },
+    {
+      "id": "bg-party-streamers",
+      "name": "パーティーストリーマー",
+      "description": "華やかなパーティー用のストリーマー",
+      "category": "festive",
+      "tags": ["streamers", "party", "colorful"],
+      "source": "pexels",
+      "license": "Pexels License"
+    },
+    {
+      "id": "bg-starry-purple",
+      "name": "スターリーパープル",
+      "description": "紫に輝く星空のような背景",
+      "category": "elegant",
+      "tags": ["stars", "purple", "night", "magical"],
+      "source": "unsplash",
+      "license": "Unsplash License"
+    },
+    {
+      "id": "bg-rose-petals",
+      "name": "ローズペタル",
+      "description": "散りばめられたバラの花びら",
+      "category": "floral",
+      "tags": ["roses", "petals", "romantic"],
+      "source": "pexels",
+      "license": "Pexels License"
+    },
+    {
+      "id": "bg-warm-sunset",
+      "name": "ウォームサンセット",
+      "description": "暖かな夕焼けグラデーション",
+      "category": "gradient",
+      "tags": ["sunset", "warm", "gradient", "orange"],
+      "source": "unsplash",
+      "license": "Unsplash License"
+    },
+    {
+      "id": "bg-silver-sparkle",
+      "name": "シルバースパークル",
+      "description": "シルバーに煌めくスパークル",
+      "category": "elegant",
+      "tags": ["silver", "sparkle", "glitter", "elegant"],
+      "source": "unsplash",
+      "license": "Unsplash License"
+    }
+  ]
+}

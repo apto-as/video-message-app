@@ -44,6 +44,10 @@ export const API_CONFIG = {
     // Background Processing
     PROCESS_IMAGE: '/process-image',
     PROCESS_BACKGROUND: '/background/process',
+
+    // Presets
+    PRESET_BACKGROUNDS: '/presets/backgrounds',
+    PRESET_MUSIC: '/presets/music',
   }
 };
 
