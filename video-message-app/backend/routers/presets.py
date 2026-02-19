@@ -83,8 +83,8 @@ async def list_background_presets(category: Optional[str] = Query(None)):
     result = []
     for bg in items:
         entry = {**bg}
-        entry["image_url"] = f"/api/presets/backgrounds/{bg['id']}/image"
-        entry["thumbnail_url"] = f"/api/presets/backgrounds/{bg['id']}/thumbnail"
+        entry["image_url"] = f"/presets/backgrounds/{bg['id']}/image"
+        entry["thumbnail_url"] = f"/presets/backgrounds/{bg['id']}/thumbnail"
         result.append(entry)
 
     return {
@@ -156,8 +156,8 @@ async def list_music_presets(mood: Optional[str] = Query(None)):
     result = []
     for track in items:
         entry = {**track}
-        entry["audio_url"] = f"/api/presets/music/{track['id']}/audio"
-        entry["preview_url"] = f"/api/presets/music/{track['id']}/preview"
+        entry["audio_url"] = f"/presets/music/{track['id']}/audio"
+        entry["preview_url"] = f"/presets/music/{track['id']}/preview"
         result.append(entry)
 
     return {

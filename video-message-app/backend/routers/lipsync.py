@@ -350,6 +350,7 @@ async def generate_video(request: VideoGenerationRequest):
                     track_id=request.bgm_id,
                     bgm_volume_db=settings.bgm_volume_db,
                     fade_out_seconds=settings.bgm_fade_out_seconds,
+                    pad_seconds=settings.bgm_pad_seconds,
                 )
                 logger.info(f"BGM '{request.bgm_id}' mixed into video")
             except FileNotFoundError:

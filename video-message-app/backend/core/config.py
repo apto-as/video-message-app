@@ -152,6 +152,12 @@ class Settings(BaseSettings):
         le=10.0,
         description="BGM fade-out duration in seconds at end of video"
     )
+    bgm_pad_seconds: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=5.0,
+        description="Seconds of BGM-only padding before and after speech"
+    )
 
     class Config:
         env_file = ".env"
