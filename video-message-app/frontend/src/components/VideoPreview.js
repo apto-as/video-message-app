@@ -12,10 +12,11 @@ const VideoPreview = ({ videoUrl, onReset }) => {
     <div className="video-preview-container">
       <h3>動画が完成しました！</h3>
       <div className="video-player">
-        <video 
-          src={videoUrl} 
-          controls 
-          width="100%" 
+        <video
+          src={videoUrl}
+          controls
+          playsInline
+          width="100%"
           style={{ maxWidth: '500px' }}
         >
           お使いのブラウザは動画再生に対応していません。
