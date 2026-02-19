@@ -1,11 +1,38 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const VideoPreview = ({ videoUrl, onReset }) => {
-  const handleDownload = () => {
-    const link = document.createElement('a');
-    link.href = videoUrl;
-    link.download = 'message-video.mp4';
-    link.click();
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const response = await fetch(videoUrl);
+      const blob = await response.blob();
+      const file = new File([blob], 'message-video.mp4', { type: 'video/mp4' });
+
+      // iOS/mobile: use Web Share API (opens native share sheet → save to camera roll)
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: '動画メッセージ' });
+        return;
+      }
+
+      // Desktop: blob download
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'message-video.mp4';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      // Share cancelled or failed — open video in new tab as last resort
+      if (err.name !== 'AbortError') {
+        window.open(videoUrl, '_blank');
+      }
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -23,8 +50,8 @@ const VideoPreview = ({ videoUrl, onReset }) => {
         </video>
       </div>
       <div className="video-actions">
-        <button onClick={handleDownload} className="download-button">
-          動画をダウンロード
+        <button onClick={handleDownload} className="download-button" disabled={downloading}>
+          {downloading ? '保存中...' : '動画を保存・共有'}
         </button>
         <button onClick={onReset} className="reset-button">
           新しく生成
